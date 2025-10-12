@@ -323,16 +323,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!settings) {
         res.json({
           id: 'default',
-          mt5Server: '',
-          mt5Login: '',
-          mt5Password: '',
+          mt5ApiSecret: null,
           accountBalance: '10000',
           riskPercentage: '1',
-          defaultLotSize: '0.01',
-          maxSpread: 3,
-          slippage: 3,
           autoTrade: 'true',
-          webhookUrl: '',
+          lastMt5Heartbeat: null,
         });
         return;
       }
