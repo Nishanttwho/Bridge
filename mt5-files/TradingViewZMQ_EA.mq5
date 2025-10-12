@@ -11,7 +11,7 @@
 #include <Zmq/Zmq.mqh>
 
 // Global variables
-Context context("tradingview-mt5");
+Context context;
 Socket pushSocket(context, ZMQ_PUSH);  // For sending responses
 Socket pullSocket(context, ZMQ_PULL);  // For receiving commands
 
