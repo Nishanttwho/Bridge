@@ -17,6 +17,23 @@ function broadcast(message: WSMessage) {
   });
 }
 
+// Calculate lot size based on 1% risk
+function calculateLotSize(accountBalance: number, riskPercentage: number, slPips: number): string {
+  // Risk amount in account currency
+  const riskAmount = (accountBalance * riskPercentage) / 100;
+  
+  // For standard lot (100,000 units), 1 pip = $10 for most pairs
+  // For 20 pips SL: risk per standard lot = 20 * $10 = $200
+  const pipValue = 10; // Standard pip value for 1 standard lot
+  const riskPerStandardLot = slPips * pipValue;
+  
+  // Calculate lot size: riskAmount / riskPerStandardLot
+  const lotSize = riskAmount / riskPerStandardLot;
+  
+  // Return with 2 decimal places, minimum 0.01
+  return Math.max(0.01, Number(lotSize.toFixed(2))).toString();
+}
+
 // Simulated MT5 trade execution
 async function executeTrade(signalId: string, type: string, symbol: string, price?: string) {
   try {
@@ -27,13 +44,57 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       return;
     }
 
+    const entryPrice = parseFloat(price || '0');
+    if (entryPrice === 0) {
+      await storage.updateSignalStatus(signalId, 'failed', 'Invalid entry price');
+      return;
+    }
+
+    // Calculate SL based on trade type (20 pips = 0.0020 for most pairs)
+    const slPips = 20;
+    const pipValue = 0.0001; // 1 pip for most forex pairs
+    const slDistance = slPips * pipValue;
+    
+    let stopLoss: string;
+    if (type === 'BUY') {
+      stopLoss = (entryPrice - slDistance).toFixed(5);
+    } else {
+      stopLoss = (entryPrice + slDistance).toFixed(5);
+    }
+
+    // Calculate lot size based on 1% risk
+    const accountBalance = parseFloat(settings.accountBalance || '10000');
+    const riskPercentage = parseFloat(settings.riskPercentage || '1');
+    const volume = calculateLotSize(accountBalance, riskPercentage, slPips);
+
+    // Close opposite trades before opening new one
+    const oppositeType = type === 'BUY' ? 'SELL' : 'BUY';
+    const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
+    
+    for (const oppositeTrade of oppositeTrades) {
+      const closePrice = price || oppositeTrade.openPrice || '0';
+      const profit = calculateProfit(oppositeTrade, closePrice);
+      await storage.closeTrade(oppositeTrade.id, closePrice, profit);
+      
+      // Broadcast closed trade
+      const closedTrade = await storage.getTradeById(oppositeTrade.id);
+      if (closedTrade) {
+        broadcast({
+          type: 'trade',
+          data: closedTrade,
+        });
+      }
+    }
+
     // Create trade record
     const trade = await storage.createTrade({
       signalId,
       symbol,
       type,
-      volume: settings.defaultLotSize || '0.01',
+      volume,
       openPrice: price || '0',
+      stopLoss,
+      takeProfit: null, // Will hold until opposite signal
       status: 'open',
       mt5OrderId: `MT5-${Date.now()}`, // Simulated MT5 order ID
     });
@@ -87,6 +148,22 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       data: stats,
     });
   }
+}
+
+// Calculate profit for a trade
+function calculateProfit(trade: { type: string; volume: string; openPrice: string | null }, closePrice: string): string {
+  const volume = parseFloat(trade.volume);
+  const open = parseFloat(trade.openPrice || '0');
+  const close = parseFloat(closePrice);
+  
+  if (open === 0 || close === 0) return '0';
+  
+  const pipValue = 10; // $10 per pip for standard lot
+  const priceDiff = trade.type === 'BUY' ? (close - open) : (open - close);
+  const pips = priceDiff / 0.0001; // Convert price difference to pips
+  const profit = pips * pipValue * volume;
+  
+  return profit.toFixed(2);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -167,6 +244,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           mt5Server: '',
           mt5Login: '',
           mt5Password: '',
+          accountBalance: '10000',
+          riskPercentage: '1',
           defaultLotSize: '0.01',
           maxSpread: 3,
           slippage: 3,
