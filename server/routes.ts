@@ -216,8 +216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", async (_req, res) => {
     try {
       const stats = await storage.getStats();
-      // Override isConnected with real MT5 connection status
-      stats.isConnected = mt5Service.getConnectionStatus();
+      // Use heartbeat-based connection status (HTTP polling system)
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stats" });
