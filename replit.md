@@ -29,6 +29,8 @@ An automated trading bridge that receives trading signals from TradingView indic
 ✅ Success rate and execution tracking
 ✅ Configurable lot size, spread, and slippage limits
 ✅ Auto-trade toggle for manual control
+✅ **NEW: Configurable TP/SL in pips** - Set default Take Profit and Stop Loss distances
+✅ **NEW: Auto-close on opposite signal** - Option to automatically close BUY when SELL signal comes (and vice versa)
 
 ## Setup Instructions
 
@@ -56,7 +58,9 @@ An automated trading bridge that receives trading signals from TradingView indic
    - Open Settings dialog in the app
    - Set MT5 API Secret (must match EA ApiSecret)
    - Configure account balance and risk parameters
+   - Set default Take Profit and Stop Loss in pips
    - Toggle auto-trade on/off as needed
+   - Enable/disable auto-close on opposite signal
 
 ## Technology Stack
 - **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
@@ -66,6 +70,14 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **Added configurable TP/SL settings** (December 2025)
+  - Default Take Profit in pips (configurable in Settings)
+  - Default Stop Loss in pips (configurable in Settings)
+  - Lot size calculation now uses configured SL pips for risk management
+- ✅ **Added auto-close on opposite signal option** (December 2025)
+  - Toggle to automatically close positions when opposite signal arrives
+  - BUY positions auto-close when SELL signal comes (and vice versa)
+  - Configurable on/off in Settings dialog
 - ✅ **Migrated to HTTP polling system** (replaced ZeroMQ for ultimate simplicity)
 - ✅ Created MT5 Expert Advisor using built-in WebRequest() function (TradingViewHTTP_EA.mq5)
 - ✅ Implemented command queue system with automatic retry/timeout (30s timeout)
