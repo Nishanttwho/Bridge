@@ -1,4 +1,5 @@
 import type { Settings } from '@shared/schema';
+import * as zmq from 'zeromq';
 
 interface TradeRequest {
   symbol: string;
@@ -15,84 +16,156 @@ interface TradeResult {
   error?: string;
 }
 
+interface ZMQCommand {
+  action: 'TRADE' | 'CLOSE' | 'GET_ACCOUNT' | 'GET_POSITIONS' | 'GET_PRICE' | 'PING';
+  data?: any;
+}
+
+interface ZMQResponse {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
+
 export class MT5Service {
-  private api: any | null = null;
-  private account: any = null;
-  private connection: any = null;
+  private pushSocket: zmq.Push | null = null;
+  private pullSocket: zmq.Pull | null = null;
   private isConnected: boolean = false;
+  private host: string = 'localhost';
+  private pushPort: number = 5555;
+  private pullPort: number = 5556;
+  private responseTimeout: number = 10000; // 10 seconds
 
   async initialize(settings: Settings): Promise<boolean> {
     try {
-      if (!settings.metaApiToken) {
-        console.error('MetaApi token not provided');
-        return false;
-      }
+      this.host = settings.zmqHost || 'localhost';
+      this.pushPort = settings.zmqPushPort || 5555;
+      this.pullPort = settings.zmqPullPort || 5556;
 
-      // Dynamic import of MetaApi to handle ESM/CJS compatibility
-      const { default: MetaApi } = await import('metaapi.cloud-sdk');
-      this.api = new MetaApi(settings.metaApiToken);
+      // Close existing sockets if any
+      await this.disconnect();
 
-      if (settings.metaApiAccountId) {
-        this.account = await this.api.metatraderAccountApi.getAccount(settings.metaApiAccountId);
+      // Create PUSH socket for sending commands
+      this.pushSocket = new zmq.Push();
+      await this.pushSocket.connect(`tcp://${this.host}:${this.pushPort}`);
+
+      // Create PULL socket for receiving responses
+      this.pullSocket = new zmq.Pull();
+      await this.pullSocket.connect(`tcp://${this.host}:${this.pullPort}`);
+
+      // Test connection with PING
+      const pingResult = await this.sendCommand({ action: 'PING' });
+      
+      if (pingResult.success) {
+        this.isConnected = true;
+        console.log(`ZeroMQ MT5 connection established: ${this.host}:${this.pushPort}`);
+        return true;
       } else {
-        console.error('MetaApi account ID not provided');
+        this.isConnected = false;
+        console.error('MT5 PING failed:', pingResult.error);
         return false;
       }
-
-      if (!this.account) {
-        return false;
-      }
-
-      await this.account.deploy();
-      await this.account.waitConnected();
-
-      this.connection = this.account.getRPCConnection();
-      await this.connection.connect();
-      await this.connection.waitSynchronized();
-
-      this.isConnected = true;
-      console.log('MT5 connection established successfully');
-      return true;
     } catch (error) {
-      console.error('MT5 initialization error:', error);
+      console.error('MT5 ZeroMQ initialization error:', error);
       this.isConnected = false;
       return false;
     }
   }
 
+  private async sendCommand(command: ZMQCommand, timeout?: number): Promise<ZMQResponse> {
+    try {
+      if (!this.pushSocket || !this.pullSocket) {
+        return {
+          success: false,
+          error: 'ZeroMQ sockets not initialized'
+        };
+      }
+
+      // Send command
+      await this.pushSocket.send(JSON.stringify(command));
+
+      // Wait for response with timeout
+      const timeoutMs = timeout || this.responseTimeout;
+      const response = await Promise.race([
+        this.receiveResponse(),
+        this.createTimeout(timeoutMs)
+      ]);
+
+      return response;
+    } catch (error) {
+      console.error('Send command error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private async receiveResponse(): Promise<ZMQResponse> {
+    try {
+      if (!this.pullSocket) {
+        return { success: false, error: 'Pull socket not initialized' };
+      }
+
+      for await (const [msg] of this.pullSocket) {
+        const response = JSON.parse(msg.toString()) as ZMQResponse;
+        return response;
+      }
+
+      return { success: false, error: 'No response received' };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to receive response'
+      };
+    }
+  }
+
+  private createTimeout(ms: number): Promise<ZMQResponse> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: false,
+          error: `Request timeout after ${ms}ms`
+        });
+      }, ms);
+    });
+  }
+
   async executeTrade(request: TradeRequest): Promise<TradeResult> {
     try {
-      if (!this.connection || !this.isConnected) {
+      if (!this.isConnected) {
         return {
           success: false,
           error: 'MT5 connection not established'
         };
       }
 
-      let result: any;
-
-      if (request.type === 'BUY') {
-        result = await this.connection.createMarketBuyOrder(
-          request.symbol,
-          request.volume,
-          request.stopLoss,
-          request.takeProfit
-        );
-      } else {
-        // FIX: Sell orders must also use (symbol, volume, stopLoss, takeProfit)
-        result = await this.connection.createMarketSellOrder(
-          request.symbol,
-          request.volume,
-          request.stopLoss,
-          request.takeProfit
-        );
-      }
-
-      return {
-        success: true,
-        orderId: result.orderId,
-        positionId: result.positionId
+      const command: ZMQCommand = {
+        action: 'TRADE',
+        data: {
+          symbol: request.symbol,
+          type: request.type,
+          volume: request.volume,
+          stopLoss: request.stopLoss,
+          takeProfit: request.takeProfit
+        }
       };
+
+      const response = await this.sendCommand(command);
+
+      if (response.success && response.data) {
+        return {
+          success: true,
+          orderId: response.data.orderId || response.data.ticket,
+          positionId: response.data.positionId || response.data.ticket
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || 'Trade execution failed'
+        };
+      }
     } catch (error) {
       console.error('Trade execution error:', error);
       return {
@@ -104,17 +177,26 @@ export class MT5Service {
 
   async closePosition(positionId: string): Promise<TradeResult> {
     try {
-      if (!this.connection || !this.isConnected) {
+      if (!this.isConnected) {
         return {
           success: false,
           error: 'MT5 connection not established'
         };
       }
 
-      await this.connection.closePosition(positionId);
+      const command: ZMQCommand = {
+        action: 'CLOSE',
+        data: {
+          positionId: positionId,
+          ticket: positionId // Support both formats
+        }
+      };
+
+      const response = await this.sendCommand(command);
 
       return {
-        success: true
+        success: response.success,
+        error: response.error
       };
     } catch (error) {
       console.error('Close position error:', error);
@@ -127,11 +209,17 @@ export class MT5Service {
 
   async getAccountInfo(): Promise<any> {
     try {
-      if (!this.connection || !this.isConnected) {
+      if (!this.isConnected) {
         return null;
       }
 
-      return await this.connection.getAccountInformation();
+      const command: ZMQCommand = {
+        action: 'GET_ACCOUNT'
+      };
+
+      const response = await this.sendCommand(command);
+
+      return response.success ? response.data : null;
     } catch (error) {
       console.error('Get account info error:', error);
       return null;
@@ -140,11 +228,17 @@ export class MT5Service {
 
   async getPositions(): Promise<any[]> {
     try {
-      if (!this.connection || !this.isConnected) {
+      if (!this.isConnected) {
         return [];
       }
 
-      return await this.connection.getPositions();
+      const command: ZMQCommand = {
+        action: 'GET_POSITIONS'
+      };
+
+      const response = await this.sendCommand(command);
+
+      return response.success && response.data ? response.data : [];
     } catch (error) {
       console.error('Get positions error:', error);
       return [];
@@ -153,17 +247,25 @@ export class MT5Service {
 
   async getSymbolPrice(symbol: string): Promise<{ bid: number; ask: number } | null> {
     try {
-      if (!this.connection || !this.isConnected) {
+      if (!this.isConnected) {
         return null;
       }
 
-      await this.connection.subscribeToMarketData(symbol);
-      const price = await this.connection.getSymbolPrice(symbol);
-      
-      return {
-        bid: price.bid,
-        ask: price.ask
+      const command: ZMQCommand = {
+        action: 'GET_PRICE',
+        data: { symbol }
       };
+
+      const response = await this.sendCommand(command);
+
+      if (response.success && response.data) {
+        return {
+          bid: response.data.bid,
+          ask: response.data.ask
+        };
+      }
+
+      return null;
     } catch (error) {
       console.error('Get symbol price error:', error);
       return null;
@@ -176,14 +278,16 @@ export class MT5Service {
 
   async disconnect(): Promise<void> {
     try {
-      if (this.connection) {
-        this.connection.close();
+      if (this.pushSocket) {
+        this.pushSocket.close();
+        this.pushSocket = null;
       }
-      if (this.account) {
-        await this.account.undeploy();
+      if (this.pullSocket) {
+        this.pullSocket.close();
+        this.pullSocket = null;
       }
       this.isConnected = false;
-      console.log('MT5 disconnected');
+      console.log('ZeroMQ MT5 disconnected');
     } catch (error) {
       console.error('Disconnect error:', error);
     }

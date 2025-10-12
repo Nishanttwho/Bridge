@@ -24,16 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Copy, Check } from "lucide-react";
+import { Loader2, Copy, Check, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { Settings } from "@shared/schema";
 
 const settingsSchema = z.object({
-  mt5Server: z.string().optional(),
-  mt5Login: z.string().optional(),
-  mt5Password: z.string().optional(),
-  metaApiToken: z.string().optional(),
-  metaApiAccountId: z.string().optional(),
+  zmqHost: z.string().min(1, "ZMQ host is required"),
+  zmqPushPort: z.coerce.number().min(1, "Push port must be greater than 0").max(65535, "Invalid port number"),
+  zmqPullPort: z.coerce.number().min(1, "Pull port must be greater than 0").max(65535, "Invalid port number"),
   accountBalance: z.string().min(1, "Account balance is required"),
   riskPercentage: z.string().min(1, "Risk percentage is required"),
   defaultLotSize: z.string().min(1, "Lot size is required"),
@@ -60,11 +58,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsSchema),
     defaultValues: {
-      mt5Server: '',
-      mt5Login: '',
-      mt5Password: '',
-      metaApiToken: '',
-      metaApiAccountId: '',
+      zmqHost: 'localhost',
+      zmqPushPort: 5555,
+      zmqPullPort: 5556,
       accountBalance: '10000',
       riskPercentage: '1',
       defaultLotSize: '0.01',
@@ -77,11 +73,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   useEffect(() => {
     if (settings) {
       form.reset({
-        mt5Server: settings.mt5Server || '',
-        mt5Login: settings.mt5Login || '',
-        mt5Password: settings.mt5Password || '',
-        metaApiToken: settings.metaApiToken || '',
-        metaApiAccountId: settings.metaApiAccountId || '',
+        zmqHost: settings.zmqHost || 'localhost',
+        zmqPushPort: settings.zmqPushPort || 5555,
+        zmqPullPort: settings.zmqPullPort || 5556,
         accountBalance: settings.accountBalance || '10000',
         riskPercentage: settings.riskPercentage || '1',
         defaultLotSize: settings.defaultLotSize || '0.01',
@@ -98,7 +92,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         ...data,
         accountBalance: data.accountBalance,
         riskPercentage: data.riskPercentage,
-        defaultLotSize: data.defaultLotSize, // Keep as string
+        defaultLotSize: data.defaultLotSize,
         maxSpread: data.maxSpread ? parseInt(data.maxSpread) : 3,
         slippage: data.slippage ? parseInt(data.slippage) : 3,
       });
@@ -107,7 +101,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
       toast({
         title: "Settings saved",
-        description: "Your MT5 configuration has been updated successfully.",
+        description: "Your MT5 ZeroMQ configuration has been updated successfully.",
       });
       onOpenChange(false);
     },
@@ -140,7 +134,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Configure your MetaTrader 5 connection and trading parameters
+            Configure your MetaTrader 5 ZeroMQ connection and trading parameters
           </DialogDescription>
         </DialogHeader>
 
@@ -180,59 +174,36 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
               </div>
 
-              {/* MetaApi Connection */}
+              {/* ZeroMQ Connection */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold">MetaApi Configuration</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">ZeroMQ Connection (FREE)</h3>
+                  <a 
+                    href="https://github.com/dingmaotu/mql-zmq" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    Installation Guide
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Get your MetaApi token and account ID from <a href="https://app.metaapi.cloud" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">app.metaapi.cloud</a>
+                  Connect directly to MT5 via ZeroMQ bridge. Requires MT5 Expert Advisor installed on your VPS/PC.
                 </p>
                 
                 <FormField
                   control={form.control}
-                  name="metaApiToken"
+                  name="zmqHost"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>MetaApi Token</FormLabel>
+                      <FormLabel>ZMQ Host</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="Your MetaApi authentication token" {...field} data-testid="input-metaapi-token" />
+                        <Input placeholder="localhost or VPS IP address" {...field} data-testid="input-zmq-host" />
                       </FormControl>
-                      <FormDescription>Required for MT5 connection</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="metaApiAccountId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>MetaApi Account ID</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Your MT5 account ID in MetaApi" {...field} data-testid="input-metaapi-account-id" />
-                      </FormControl>
-                      <FormDescription>The ID of your MT5 account in MetaApi</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* MT5 Connection (Optional - for reference) */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold">MT5 Details (Optional)</h3>
-                <p className="text-xs text-muted-foreground">For reference only - connection is managed through MetaApi</p>
-                
-                <FormField
-                  control={form.control}
-                  name="mt5Server"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Server</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Exness-MT5Real" {...field} data-testid="input-mt5-server" />
-                      </FormControl>
-                      <FormDescription>Your MT5 broker server (e.g., Exness-MT5Real)</FormDescription>
+                      <FormDescription>
+                        Use 'localhost' if MT5 is on same machine, or your VPS IP address
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -241,13 +212,18 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
-                    name="mt5Login"
+                    name="zmqPushPort"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Login</FormLabel>
+                        <FormLabel>Push Port (Send Commands)</FormLabel>
                         <FormControl>
-                          <Input placeholder="12345678" {...field} data-testid="input-mt5-login" />
+                          <Input 
+                            type="number" 
+                            {...field} 
+                            data-testid="input-zmq-push-port" 
+                          />
                         </FormControl>
+                        <FormDescription>Default: 5555</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -255,17 +231,29 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
                   <FormField
                     control={form.control}
-                    name="mt5Password"
+                    name="zmqPullPort"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Password</FormLabel>
+                        <FormLabel>Pull Port (Receive Responses)</FormLabel>
                         <FormControl>
-                          <Input type="password" {...field} data-testid="input-mt5-password" />
+                          <Input 
+                            type="number" 
+                            {...field} 
+                            data-testid="input-zmq-pull-port" 
+                          />
                         </FormControl>
+                        <FormDescription>Default: 5556</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    📋 <strong>Setup Required:</strong> Install the TradingViewZMQ_EA.mq5 Expert Advisor in your MT5 terminal. 
+                    Check the <code className="bg-background/50 px-1 rounded">mt5-files/INSTALLATION_GUIDE.md</code> for complete instructions.
+                  </p>
                 </div>
               </div>
 
