@@ -24,6 +24,8 @@ export const trades = pgTable("trades", {
   volume: decimal("volume", { precision: 10, scale: 2 }).notNull(), // Lot size
   openPrice: decimal("open_price", { precision: 10, scale: 5 }),
   closePrice: decimal("close_price", { precision: 10, scale: 5 }),
+  stopLoss: decimal("stop_loss", { precision: 10, scale: 5 }), // Stop Loss price
+  takeProfit: decimal("take_profit", { precision: 10, scale: 5 }), // Take Profit price
   profit: decimal("profit", { precision: 10, scale: 2 }),
   status: text("status").notNull().default('open'), // 'open' | 'closed' | 'failed'
   mt5OrderId: text("mt5_order_id"),
@@ -38,6 +40,8 @@ export const settings = pgTable("settings", {
   mt5Server: text("mt5_server"),
   mt5Login: text("mt5_login"),
   mt5Password: text("mt5_password"),
+  accountBalance: decimal("account_balance", { precision: 15, scale: 2 }).notNull().default('10000'), // Account balance for risk calculation
+  riskPercentage: decimal("risk_percentage", { precision: 5, scale: 2 }).notNull().default('1'), // Risk per trade (1%)
   defaultLotSize: decimal("default_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'),
   maxSpread: integer("max_spread").default(3),
   slippage: integer("slippage").default(3),
