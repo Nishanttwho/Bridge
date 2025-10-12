@@ -38,11 +38,9 @@ export const trades = pgTable("trades", {
 // MT5 Settings
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  mt5Server: text("mt5_server"),
-  mt5Login: text("mt5_login"),
-  mt5Password: text("mt5_password"),
-  metaApiToken: text("metaapi_token"), // MetaApi authentication token
-  metaApiAccountId: text("metaapi_account_id"), // MetaApi account ID
+  zmqHost: text("zmq_host").default('localhost'), // ZeroMQ host (localhost or VPS IP)
+  zmqPushPort: integer("zmq_push_port").default(5555), // Port for sending commands
+  zmqPullPort: integer("zmq_pull_port").default(5556), // Port for receiving responses
   accountBalance: decimal("account_balance", { precision: 15, scale: 2 }).notNull().default('10000'), // Account balance for risk calculation
   riskPercentage: decimal("risk_percentage", { precision: 5, scale: 2 }).notNull().default('1'), // Risk per trade (1%)
   defaultLotSize: decimal("default_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'),
