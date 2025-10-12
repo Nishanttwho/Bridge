@@ -70,6 +70,13 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **CRITICAL BUGFIXES** (October 2025)
+  - Fixed webhook endpoint using hardcoded TP/SL values instead of configured settings
+  - Fixed TP calculation (was null, now properly calculated from defaultTpPips)
+  - Fixed auto-close to only affect same symbol (was closing ALL opposite positions)
+  - Added signal deduplication to prevent multiple trades from duplicate alerts (5-second window)
+  - Verified command queue prevents duplicate execution
+  - **Result: One signal = One trade (production-safe)**
 - ✅ **Added configurable TP/SL settings** (December 2025)
   - Default Take Profit in pips (configurable in Settings)
   - Default Stop Loss in pips (configurable in Settings)
@@ -77,6 +84,7 @@ An automated trading bridge that receives trading signals from TradingView indic
 - ✅ **Added auto-close on opposite signal option** (December 2025)
   - Toggle to automatically close positions when opposite signal arrives
   - BUY positions auto-close when SELL signal comes (and vice versa)
+  - Only closes positions for the SAME symbol (symbol-specific)
   - Configurable on/off in Settings dialog
 - ✅ **Migrated to HTTP polling system** (replaced ZeroMQ for ultimate simplicity)
 - ✅ Created MT5 Expert Advisor using built-in WebRequest() function (TradingViewHTTP_EA.mq5)
