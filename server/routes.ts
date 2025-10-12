@@ -8,12 +8,24 @@ import { mt5Service } from "./mt5-service";
 
 // WebSocket clients tracking
 const wsClients = new Set<WebSocket>();
+const mt5WsClients = new Set<WebSocket>();
 
 // Broadcast to all connected WebSocket clients
 function broadcast(message: WSMessage) {
   wsClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(message));
+    }
+  });
+}
+
+// Send command to MT5 via WebSocket
+function sendCommandToMT5(command: any) {
+  const message = JSON.stringify(command);
+  mt5WsClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      console.log(`[MT5-WS] Sending command ${command.id} to MT5: ${command.action}`);
+      client.send(message);
     }
   });
 }
@@ -464,12 +476,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
             if (positionId) {
               // Queue close command
-              await storage.enqueueCommand({
+              const closeCommand = await storage.enqueueCommand({
                 action: 'CLOSE',
                 positionId: positionId,
                 status: 'pending',
               });
               console.log(`[WEBHOOK] Queued close command for position ${positionId}`);
+              
+              // Send close command to MT5 via WebSocket (if connected)
+              sendCommandToMT5({
+                id: closeCommand.id,
+                action: 'CLOSE',
+                positionId: positionId,
+              });
             }
             
             // Mark trade as closing
@@ -492,6 +511,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         console.log(`[WEBHOOK] Enqueued trade command ${tradeCommand.id} for signal ${signal.id}`);
+        
+        // Send command to MT5 via WebSocket (if connected)
+        sendCommandToMT5({
+          id: tradeCommand.id,
+          action: tradeCommand.action,
+          symbol: tradeCommand.symbol,
+          type: tradeCommand.type,
+          volume: tradeCommand.volume ? parseFloat(tradeCommand.volume) : undefined,
+          stopLoss: tradeCommand.stopLoss ? parseFloat(tradeCommand.stopLoss) : undefined,
+          takeProfit: tradeCommand.takeProfit ? parseFloat(tradeCommand.takeProfit) : undefined,
+        });
       }
 
       res.json({ 
@@ -775,7 +805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  // WebSocket server setup
+  // WebSocket server setup for frontend clients
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
   wss.on('connection', (ws: WebSocket) => {
@@ -800,6 +830,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
       wsClients.delete(ws);
+    });
+  });
+
+  // MT5 WebSocket server setup (separate endpoint)
+  const mt5Wss = new WebSocketServer({ server: httpServer, path: '/mt5-ws' });
+
+  mt5Wss.on('connection', async (ws: WebSocket, req) => {
+    console.log('[MT5-WS] MT5 client attempting connection...');
+    
+    // Extract API secret from query params or headers
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const apiSecret = url.searchParams.get('secret') || req.headers['x-mt5-api-secret'] as string;
+    
+    // Verify API secret
+    const settings = await storage.getSettings();
+    if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
+      console.log('[MT5-WS] Unauthorized connection attempt');
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
+
+    console.log('[MT5-WS] MT5 client connected successfully');
+    mt5WsClients.add(ws);
+    
+    // Update heartbeat
+    await storage.updateMt5Heartbeat();
+
+    // Send any pending commands immediately
+    const pendingCommands = await storage.getPendingCommands();
+    for (const command of pendingCommands) {
+      sendCommandToMT5({
+        id: command.id,
+        action: command.action,
+        symbol: command.symbol,
+        type: command.type,
+        volume: command.volume ? parseFloat(command.volume) : undefined,
+        stopLoss: command.stopLoss ? parseFloat(command.stopLoss) : undefined,
+        takeProfit: command.takeProfit ? parseFloat(command.takeProfit) : undefined,
+        positionId: command.positionId,
+      });
+      // Mark as sent
+      await storage.markCommandAsSent(command.id);
+    }
+
+    // Broadcast stats update (connection status)
+    const stats = await storage.getStats();
+    broadcast({
+      type: 'stats',
+      data: stats,
+    });
+
+    // Handle messages from MT5 (execution reports)
+    ws.on('message', async (data: Buffer) => {
+      try {
+        const report = JSON.parse(data.toString());
+        console.log(`[MT5-WS] Received report:`, report);
+
+        const { commandId, success, orderId, positionId, error: errorMessage } = report;
+
+        if (!commandId) {
+          console.log('[MT5-WS] Missing commandId in report');
+          return;
+        }
+
+        const command = await storage.getCommandById(commandId);
+        if (!command) {
+          console.log(`[MT5-WS] Command ${commandId} not found`);
+          ws.send(JSON.stringify({ success: true, warning: 'Command not found' }));
+          return;
+        }
+
+        // Store execution result
+        await storage.createExecutionResult({
+          success: success ? 'true' : 'false',
+          commandId,
+          orderId: orderId || null,
+          positionId: positionId || null,
+          errorMessage: errorMessage || null,
+        });
+
+        // Mark command as acknowledged
+        await storage.markCommandAsAcknowledged(commandId);
+        console.log(`[MT5-WS] Command ${commandId} acknowledged`);
+
+        // Update associated signal and trade
+        if (command.signalId) {
+          if (success && orderId) {
+            await storage.updateSignalStatus(command.signalId, 'executed');
+            
+            const signal = await storage.getSignalById(command.signalId);
+            if (signal && command.action === 'TRADE') {
+              await storage.createTrade({
+                signalId: command.signalId,
+                symbol: signal.symbol,
+                type: signal.type,
+                openPrice: signal.price || '0',
+                volume: command.volume || '0',
+                mt5OrderId: orderId,
+                mt5PositionId: positionId || orderId,
+                stopLoss: command.stopLoss,
+                takeProfit: command.takeProfit,
+                status: 'open',
+              });
+              console.log(`[MT5-WS] Trade created for signal ${command.signalId}`);
+            }
+
+            const updatedSignal = await storage.getSignalById(command.signalId);
+            if (updatedSignal) {
+              broadcast({
+                type: 'signal',
+                data: updatedSignal,
+              });
+            }
+          } else {
+            await storage.updateSignalStatus(command.signalId, 'failed', errorMessage || 'Trade execution failed in MT5');
+            console.log(`[MT5-WS] Signal ${command.signalId} marked as failed`);
+            
+            const updatedSignal = await storage.getSignalById(command.signalId);
+            if (updatedSignal) {
+              broadcast({
+                type: 'signal',
+                data: updatedSignal,
+              });
+            }
+          }
+        }
+
+        // Broadcast stats update
+        const updatedStats = await storage.getStats();
+        broadcast({
+          type: 'stats',
+          data: updatedStats,
+        });
+
+        // Send acknowledgment to MT5
+        ws.send(JSON.stringify({ success: true }));
+      } catch (error) {
+        console.error('[MT5-WS] Error processing report:', error);
+        ws.send(JSON.stringify({ success: false, error: 'Failed to process report' }));
+      }
+    });
+
+    ws.on('close', () => {
+      console.log('[MT5-WS] MT5 client disconnected');
+      mt5WsClients.delete(ws);
+      
+      // Broadcast stats update (connection status)
+      storage.getStats().then(stats => {
+        broadcast({
+          type: 'stats',
+          data: stats,
+        });
+      });
+    });
+
+    ws.on('error', (error) => {
+      console.error('[MT5-WS] WebSocket error:', error);
+      mt5WsClients.delete(ws);
     });
   });
 
