@@ -18,6 +18,42 @@ function broadcast(message: WSMessage) {
   });
 }
 
+// Get pip value based on symbol (handles JPY, crypto, indices, metals)
+function getPipValue(symbol: string): number {
+  const upperSymbol = symbol.toUpperCase();
+  
+  // JPY pairs: pip = 0.01 (2-3 digits)
+  if (upperSymbol.includes('JPY')) {
+    return 0.01;
+  }
+  
+  // Metals (XAUUSD, XAGUSD): pip = 0.01
+  if (upperSymbol.includes('XAU') || upperSymbol.includes('XAG') || upperSymbol.includes('GOLD') || upperSymbol.includes('SILVER')) {
+    return 0.01;
+  }
+  
+  // Crypto pairs: use larger pip value
+  if (upperSymbol.includes('BTC') || upperSymbol.includes('ETH') || upperSymbol.includes('XRP') || 
+      upperSymbol.includes('LTC') || upperSymbol.includes('DOGE') || upperSymbol.includes('ADA')) {
+    return 1.0;
+  }
+  
+  // Indices: use point value
+  if (upperSymbol.includes('US30') || upperSymbol.includes('NAS') || upperSymbol.includes('SPX') || 
+      upperSymbol.includes('GER') || upperSymbol.includes('DAX') || upperSymbol.includes('FTSE')) {
+    return 1.0;
+  }
+  
+  // Standard forex pairs: pip = 0.0001 (4-5 digits)
+  return 0.0001;
+}
+
+// Validate symbol format (allows broker suffixes like .e, .cash, _m, etc.)
+function isValidSymbol(symbol: string): boolean {
+  // Must be 3-30 characters, alphanumeric plus common broker suffixes
+  return /^[A-Za-z0-9._-]{3,30}$/.test(symbol);
+}
+
 // Calculate lot size based on 1% risk
 function calculateLotSize(accountBalance: number, riskPercentage: number, slPips: number): string {
   // Risk amount in account currency
@@ -62,21 +98,26 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       return;
     }
 
-    // Calculate SL and TP based on settings
+    // Calculate SL and TP based on settings with dynamic pip value
     const slPips = parseFloat(settings.defaultSlPips || '20');
     const tpPips = parseFloat(settings.defaultTpPips || '30');
-    const pipValue = 0.0001; // 1 pip for most forex pairs
+    const pipValue = getPipValue(symbol); // Dynamic based on symbol type
     const slDistance = slPips * pipValue;
     const tpDistance = tpPips * pipValue;
+    
+    // Determine decimal places based on pip value
+    let decimalPlaces = 5; // Default for standard forex
+    if (pipValue >= 1.0) decimalPlaces = 2; // Crypto/indices
+    else if (pipValue === 0.01) decimalPlaces = 3; // JPY/metals
     
     let stopLoss: number;
     let takeProfit: number;
     if (type === 'BUY') {
-      stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
-      takeProfit = parseFloat((entryPrice + tpDistance).toFixed(5));
+      stopLoss = parseFloat((entryPrice - slDistance).toFixed(decimalPlaces));
+      takeProfit = parseFloat((entryPrice + tpDistance).toFixed(decimalPlaces));
     } else {
-      stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
-      takeProfit = parseFloat((entryPrice - tpDistance).toFixed(5));
+      stopLoss = parseFloat((entryPrice + slDistance).toFixed(decimalPlaces));
+      takeProfit = parseFloat((entryPrice - tpDistance).toFixed(decimalPlaces));
     }
 
     // Calculate lot size based on risk settings
@@ -248,16 +289,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse TradingView alert payload
       const body = req.body;
       
-      // Extract signal data (TradingView sends different formats)
-      const tradingViewSymbol = body.symbol || body.ticker || 'UNKNOWN';
+      console.log(`[WEBHOOK] Raw payload:`, JSON.stringify(body));
+      
+      // Extract signal data (TradingView sends many different formats)
+      // Support: {symbol, type, price}, {ticker, action, close}, {symbol, side, last}, etc.
+      const tradingViewSymbol = body.symbol || body.ticker || body.pair || body.instrument || 'UNKNOWN';
+      const signalType = body.type || body.action || body.side || body.signal || 'BUY';
+      const signalPrice = body.price || body.close || body.last || body.entry || null;
+      
+      // Validate extracted data
+      if (tradingViewSymbol === 'UNKNOWN') {
+        console.log(`[WEBHOOK] No symbol found in payload`);
+        return res.status(400).json({ 
+          error: "Missing symbol in webhook payload",
+          hint: "Include 'symbol', 'ticker', 'pair', or 'instrument' in your TradingView alert"
+        });
+      }
+      
+      // Normalize signal type (support: BUY/SELL, buy/sell, long/short, LONG/SHORT)
+      let normalizedType = signalType.toString().toUpperCase();
+      if (normalizedType === 'LONG') normalizedType = 'BUY';
+      if (normalizedType === 'SHORT') normalizedType = 'SELL';
+      
+      if (normalizedType !== 'BUY' && normalizedType !== 'SELL') {
+        console.log(`[WEBHOOK] Invalid signal type: ${signalType}`);
+        return res.status(400).json({ 
+          error: "Invalid signal type",
+          received: signalType,
+          expected: "BUY, SELL, LONG, or SHORT"
+        });
+      }
       
       // Map TradingView symbol to MT5 symbol
       const mt5Symbol = await storage.mapSymbol(tradingViewSymbol);
       
       const signalData = {
-        type: body.type || body.action || 'BUY',
+        type: normalizedType,
         symbol: mt5Symbol,
-        price: body.price?.toString() || body.close?.toString(),
+        price: signalPrice?.toString() || null,
         source: 'tradingview',
         status: 'pending',
       };
@@ -305,6 +374,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if auto-trade is enabled
       const settings = await storage.getSettings();
       if (settings && settings.autoTrade === 'true') {
+        // Validate symbol
+        if (!isValidSymbol(signal.symbol)) {
+          console.log(`[WEBHOOK] Invalid symbol format: ${signal.symbol}`);
+          await storage.updateSignalStatus(signal.id, 'failed', 'Invalid symbol format');
+          return res.json({ 
+            success: false, 
+            error: 'Invalid symbol format',
+            signalId: signal.id
+          });
+        }
+        
         // Get configured TP/SL settings
         const slPips = parseFloat(settings.defaultSlPips || '20');
         const tpPips = parseFloat(settings.defaultTpPips || '30');
@@ -313,9 +393,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`[WEBHOOK] Settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
         
-        // Calculate SL and TP prices
+        // Calculate SL and TP prices using dynamic pip value
         const entryPrice = parseFloat(signal.price || '0');
-        const pipValue = 0.0001; // Standard for 5-digit forex pairs
+        if (entryPrice <= 0) {
+          console.log(`[WEBHOOK] Invalid entry price: ${signal.price}`);
+          await storage.updateSignalStatus(signal.id, 'failed', 'Invalid entry price');
+          return res.json({ 
+            success: false, 
+            error: 'Invalid entry price',
+            signalId: signal.id
+          });
+        }
+        
+        const pipValue = getPipValue(signal.symbol); // Dynamic based on symbol type
         const slDistance = slPips * pipValue;
         const tpDistance = tpPips * pipValue;
         
@@ -323,15 +413,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let takeProfit: number | null = null;
         
         if (entryPrice > 0) {
+          // Determine decimal places based on pip value
+          let decimalPlaces = 5; // Default for standard forex
+          if (pipValue >= 1.0) decimalPlaces = 2; // Crypto/indices
+          else if (pipValue === 0.01) decimalPlaces = 3; // JPY/metals
+          
           if (signal.type === 'BUY') {
-            stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
-            takeProfit = parseFloat((entryPrice + tpDistance).toFixed(5));
+            stopLoss = parseFloat((entryPrice - slDistance).toFixed(decimalPlaces));
+            takeProfit = parseFloat((entryPrice + tpDistance).toFixed(decimalPlaces));
           } else { // SELL
-            stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
-            takeProfit = parseFloat((entryPrice - tpDistance).toFixed(5));
+            stopLoss = parseFloat((entryPrice + slDistance).toFixed(decimalPlaces));
+            takeProfit = parseFloat((entryPrice - tpDistance).toFixed(decimalPlaces));
           }
           
-          console.log(`[WEBHOOK] Calculated - Entry: ${entryPrice}, SL: ${stopLoss} (${slPips} pips), TP: ${takeProfit} (${tpPips} pips)`);
+          console.log(`[WEBHOOK] Calculated - Entry: ${entryPrice}, SL: ${stopLoss} (${slPips} pips), TP: ${takeProfit} (${tpPips} pips), PipValue: ${pipValue}, Decimals: ${decimalPlaces}`);
         }
 
         // Calculate lot size based on configured risk
