@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertSignalSchema, insertSettingsSchema, type WSMessage } from "@shared/schema";
+import { insertSignalSchema, insertSettingsSchema, insertSymbolMappingSchema, type WSMessage } from "@shared/schema";
 import { mt5Service } from "./mt5-service";
 
 // WebSocket clients tracking
@@ -357,6 +357,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Invalid settings data",
         details: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  });
+
+  // Get symbol mappings
+  app.get("/api/symbol-mappings", async (_req, res) => {
+    try {
+      const mappings = await storage.getSymbolMappings();
+      res.json(mappings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch symbol mappings" });
+    }
+  });
+
+  // Create symbol mapping
+  app.post("/api/symbol-mappings", async (req, res) => {
+    try {
+      const validatedMapping = insertSymbolMappingSchema.parse(req.body);
+      const mapping = await storage.createSymbolMapping(validatedMapping);
+      res.json(mapping);
+    } catch (error) {
+      console.error('Symbol mapping creation error:', error);
+      res.status(400).json({ 
+        error: "Failed to create symbol mapping",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Delete symbol mapping
+  app.delete("/api/symbol-mappings/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSymbolMapping(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Symbol mapping deletion error:', error);
+      res.status(500).json({ error: "Failed to delete symbol mapping" });
     }
   });
 
