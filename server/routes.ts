@@ -460,10 +460,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (success) {
         await storage.markCommandAsAcknowledged(commandId);
         
-        // Get the command to find associated signal
-        const command = await storage.getNextPendingCommand();
-        // In a real implementation, we'd query the specific command by ID
-        // For now, we'll update the signal status if signalId exists
+        // Get the specific command by ID to find associated signal
+        const command = await storage.getCommandById(commandId);
         if (command?.signalId) {
           await storage.updateSignalStatus(command.signalId, 'executed');
           

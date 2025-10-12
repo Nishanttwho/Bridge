@@ -36,6 +36,8 @@ export interface IStorage {
   // MT5 Command Queue
   enqueueCommand(command: InsertMt5Command): Promise<Mt5Command>;
   getNextPendingCommand(): Promise<Mt5Command | undefined>;
+  getCommandById(commandId: string): Promise<Mt5Command | undefined>;
+  retryTimedOutCommands(): Promise<void>;
   markCommandAsSent(commandId: string): Promise<void>;
   markCommandAsAcknowledged(commandId: string): Promise<void>;
   markCommandAsFailed(commandId: string, errorMessage: string): Promise<void>;
@@ -220,12 +222,41 @@ export class MemStorage implements IStorage {
   }
 
   async getNextPendingCommand(): Promise<Mt5Command | undefined> {
+    // First, check for sent commands that have timed out (>30 seconds without acknowledgment)
+    await this.retryTimedOutCommands();
+    
     const allCommands = Array.from(this.mt5Commands.values());
     const pendingCommands = allCommands
       .filter(c => c.status === 'pending')
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     
     return pendingCommands[0];
+  }
+
+  async getCommandById(commandId: string): Promise<Mt5Command | undefined> {
+    return this.mt5Commands.get(commandId);
+  }
+
+  async retryTimedOutCommands(): Promise<void> {
+    const now = new Date();
+    const timeout = 30000; // 30 seconds
+    
+    const allCommands = Array.from(this.mt5Commands.values());
+    const timedOutCommands = allCommands.filter(c => {
+      if (c.status === 'sent' && c.sentAt) {
+        const sentTime = new Date(c.sentAt).getTime();
+        const elapsed = now.getTime() - sentTime;
+        return elapsed > timeout;
+      }
+      return false;
+    });
+
+    for (const command of timedOutCommands) {
+      command.status = 'pending';
+      command.sentAt = null;
+      this.mt5Commands.set(command.id, command);
+      console.log(`Command ${command.id} timed out and returned to pending queue`);
+    }
   }
 
   async markCommandAsSent(commandId: string): Promise<void> {
