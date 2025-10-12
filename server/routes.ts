@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertSignalSchema, insertSettingsSchema, type WSMessage } from "@shared/schema";
+import { mt5Service } from "./mt5-service";
 
 // WebSocket clients tracking
 const wsClients = new Set<WebSocket>();
@@ -36,7 +37,7 @@ function calculateLotSize(accountBalance: number, riskPercentage: number, slPips
   return Math.max(0.01, Number(lotSize.toFixed(2))).toString();
 }
 
-// Simulated MT5 trade execution
+// Real MT5 trade execution using MetaApi
 async function executeTrade(signalId: string, type: string, symbol: string, price?: string) {
   try {
     const settings = await storage.getSettings();
@@ -44,6 +45,15 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
     if (!settings || settings.autoTrade !== 'true') {
       await storage.updateSignalStatus(signalId, 'failed', 'Auto-trade is disabled');
       return;
+    }
+
+    // Initialize MT5 connection if not already connected
+    if (!mt5Service.getConnectionStatus()) {
+      const connected = await mt5Service.initialize(settings);
+      if (!connected) {
+        await storage.updateSignalStatus(signalId, 'failed', 'MT5 connection failed');
+        return;
+      }
     }
 
     const entryPrice = parseFloat(price || '0');
@@ -57,23 +67,31 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
     const pipValue = 0.0001; // 1 pip for most forex pairs
     const slDistance = slPips * pipValue;
     
-    let stopLoss: string;
+    let stopLoss: number;
     if (type === 'BUY') {
-      stopLoss = (entryPrice - slDistance).toFixed(5);
+      stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
     } else {
-      stopLoss = (entryPrice + slDistance).toFixed(5);
+      stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
     }
 
     // Calculate lot size based on 1% risk
     const accountBalance = parseFloat(settings.accountBalance || '10000');
     const riskPercentage = parseFloat(settings.riskPercentage || '1');
-    const volume = calculateLotSize(accountBalance, riskPercentage, slPips);
+    const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
 
     // Close opposite trades before opening new one
     const oppositeType = type === 'BUY' ? 'SELL' : 'BUY';
     const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
     
     for (const oppositeTrade of oppositeTrades) {
+      if (oppositeTrade.mt5OrderId) {
+        // Close position in MT5 - use position ID from mt5OrderId
+        const closeResult = await mt5Service.closePosition(oppositeTrade.mt5OrderId);
+        if (!closeResult.success) {
+          console.error(`Failed to close position ${oppositeTrade.mt5OrderId}: ${closeResult.error}`);
+        }
+      }
+      
       const closePrice = price || oppositeTrade.openPrice || '0';
       const profit = calculateProfit(oppositeTrade, closePrice);
       await storage.closeTrade(oppositeTrade.id, closePrice, profit);
@@ -88,17 +106,40 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       }
     }
 
-    // Create trade record
+    // Execute trade in MT5
+    const mt5Result = await mt5Service.executeTrade({
+      symbol,
+      type: type as 'BUY' | 'SELL',
+      volume,
+      stopLoss,
+      takeProfit: undefined
+    });
+
+    if (!mt5Result.success) {
+      await storage.updateSignalStatus(signalId, 'failed', mt5Result.error || 'Trade execution failed');
+      
+      // Broadcast failed signal
+      const updatedSignal = await storage.getSignalById(signalId);
+      if (updatedSignal) {
+        broadcast({
+          type: 'signal',
+          data: updatedSignal,
+        });
+      }
+      return;
+    }
+
+    // Create trade record - prioritize positionId for closing trades later
     const trade = await storage.createTrade({
       signalId,
       symbol,
       type,
-      volume,
+      volume: volume.toString(),
       openPrice: price || '0',
-      stopLoss,
-      takeProfit: null, // Will hold until opposite signal
+      stopLoss: stopLoss.toString(),
+      takeProfit: null,
       status: 'open',
-      mt5OrderId: `MT5-${Date.now()}`, // Simulated MT5 order ID
+      mt5OrderId: mt5Result.positionId || `MT5-${Date.now()}`,
     });
 
     // Update signal status
@@ -173,6 +214,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", async (_req, res) => {
     try {
       const stats = await storage.getStats();
+      // Override isConnected with real MT5 connection status
+      stats.isConnected = mt5Service.getConnectionStatus();
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stats" });

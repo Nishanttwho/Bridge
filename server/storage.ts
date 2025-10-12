@@ -154,6 +154,8 @@ export class MemStorage implements IStorage {
       mt5Server: insertSettings.mt5Server ?? null,
       mt5Login: insertSettings.mt5Login ?? null,
       mt5Password: insertSettings.mt5Password ?? null,
+      metaApiToken: insertSettings.metaApiToken ?? null,
+      metaApiAccountId: insertSettings.metaApiAccountId ?? null,
       webhookUrl: insertSettings.webhookUrl ?? null,
       accountBalance: typeof insertSettings.accountBalance === 'number' 
         ? insertSettings.accountBalance.toString() 
@@ -189,7 +191,7 @@ export class MemStorage implements IStorage {
       pendingSignals,
       executedTrades,
       successRate: Math.round(successRate),
-      isConnected: this.settings?.mt5Login ? true : false,
+      isConnected: this.settings?.metaApiToken ? true : false,
     };
   }
 }

@@ -32,6 +32,8 @@ const settingsSchema = z.object({
   mt5Server: z.string().optional(),
   mt5Login: z.string().optional(),
   mt5Password: z.string().optional(),
+  metaApiToken: z.string().optional(),
+  metaApiAccountId: z.string().optional(),
   accountBalance: z.string().min(1, "Account balance is required"),
   riskPercentage: z.string().min(1, "Risk percentage is required"),
   defaultLotSize: z.string().min(1, "Lot size is required"),
@@ -61,6 +63,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       mt5Server: '',
       mt5Login: '',
       mt5Password: '',
+      metaApiToken: '',
+      metaApiAccountId: '',
       accountBalance: '10000',
       riskPercentage: '1',
       defaultLotSize: '0.01',
@@ -76,6 +80,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         mt5Server: settings.mt5Server || '',
         mt5Login: settings.mt5Login || '',
         mt5Password: settings.mt5Password || '',
+        metaApiToken: settings.metaApiToken || '',
+        metaApiAccountId: settings.metaApiAccountId || '',
         accountBalance: settings.accountBalance || '10000',
         riskPercentage: settings.riskPercentage || '1',
         defaultLotSize: settings.defaultLotSize || '0.01',
@@ -174,9 +180,48 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
               </div>
 
-              {/* MT5 Connection */}
+              {/* MetaApi Connection */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold">MT5 Connection</h3>
+                <h3 className="text-sm font-semibold">MetaApi Configuration</h3>
+                <p className="text-xs text-muted-foreground">
+                  Get your MetaApi token and account ID from <a href="https://app.metaapi.cloud" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">app.metaapi.cloud</a>
+                </p>
+                
+                <FormField
+                  control={form.control}
+                  name="metaApiToken"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>MetaApi Token</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="Your MetaApi authentication token" {...field} data-testid="input-metaapi-token" />
+                      </FormControl>
+                      <FormDescription>Required for MT5 connection</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="metaApiAccountId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>MetaApi Account ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Your MT5 account ID in MetaApi" {...field} data-testid="input-metaapi-account-id" />
+                      </FormControl>
+                      <FormDescription>The ID of your MT5 account in MetaApi</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* MT5 Connection (Optional - for reference) */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold">MT5 Details (Optional)</h3>
+                <p className="text-xs text-muted-foreground">For reference only - connection is managed through MetaApi</p>
                 
                 <FormField
                   control={form.control}
@@ -185,9 +230,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     <FormItem>
                       <FormLabel>Server</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., MetaQuotes-Demo" {...field} data-testid="input-mt5-server" />
+                        <Input placeholder="e.g., Exness-MT5Real" {...field} data-testid="input-mt5-server" />
                       </FormControl>
-                      <FormDescription>Your MT5 broker server address</FormDescription>
+                      <FormDescription>Your MT5 broker server (e.g., Exness-MT5Real)</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -40,6 +40,8 @@ export const settings = pgTable("settings", {
   mt5Server: text("mt5_server"),
   mt5Login: text("mt5_login"),
   mt5Password: text("mt5_password"),
+  metaApiToken: text("metaapi_token"), // MetaApi authentication token
+  metaApiAccountId: text("metaapi_account_id"), // MetaApi account ID
   accountBalance: decimal("account_balance", { precision: 15, scale: 2 }).notNull().default('10000'), // Account balance for risk calculation
   riskPercentage: decimal("risk_percentage", { precision: 5, scale: 2 }).notNull().default('1'), // Risk per trade (1%)
   defaultLotSize: decimal("default_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'),
