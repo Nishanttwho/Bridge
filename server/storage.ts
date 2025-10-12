@@ -175,17 +175,13 @@ export class MemStorage implements IStorage {
       ...insertSettings,
       id,
       mt5ApiSecret: insertSettings.mt5ApiSecret ?? null,
-      webhookUrl: insertSettings.webhookUrl ?? null,
       accountBalance: typeof insertSettings.accountBalance === 'number' 
         ? insertSettings.accountBalance.toString() 
         : insertSettings.accountBalance || '10000',
       riskPercentage: typeof insertSettings.riskPercentage === 'number'
         ? insertSettings.riskPercentage.toString()
         : insertSettings.riskPercentage || '1',
-      defaultLotSize: insertSettings.defaultLotSize || '0.01',
       autoTrade: insertSettings.autoTrade || 'true',
-      maxSpread: insertSettings.maxSpread ?? null,
-      slippage: insertSettings.slippage ?? null,
       lastMt5Heartbeat: this.settings?.lastMt5Heartbeat ?? null,
     };
     this.settings = settings;
