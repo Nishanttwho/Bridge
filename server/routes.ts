@@ -241,9 +241,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body;
       
       // Extract signal data (TradingView sends different formats)
+      const tradingViewSymbol = body.symbol || body.ticker || 'UNKNOWN';
+      
+      // Map TradingView symbol to MT5 symbol
+      const mt5Symbol = await storage.mapSymbol(tradingViewSymbol);
+      
       const signalData = {
         type: body.type || body.action || 'BUY',
-        symbol: body.symbol || body.ticker || 'UNKNOWN',
+        symbol: mt5Symbol,
         price: body.price?.toString() || body.close?.toString(),
         source: 'tradingview',
         status: 'pending',
@@ -283,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const riskPercentage = parseFloat(settings.riskPercentage || '1');
         const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
 
-        // Enqueue command for MT5 to execute
+        // Enqueue command for MT5 to execute (use mapped MT5 symbol)
         await storage.enqueueCommand({
           action: 'TRADE',
           symbol: signal.symbol,
