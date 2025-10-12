@@ -479,6 +479,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "commandId is required" });
       }
 
+      // Log the report for debugging
+      console.log(`MT5 Report: commandId=${commandId}, success=${success}, error=${errorMessage || 'none'}`);
+
       // Update heartbeat
       await storage.updateMt5Heartbeat();
 
@@ -492,12 +495,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         responseData: JSON.stringify(req.body),
       });
 
+      // Get the command to find associated signal
+      const command = await storage.getCommandById(commandId);
+
       // Mark command as acknowledged or failed
       if (success) {
         await storage.markCommandAsAcknowledged(commandId);
         
-        // Get the specific command by ID to find associated signal
-        const command = await storage.getCommandById(commandId);
         if (command?.signalId) {
           await storage.updateSignalStatus(command.signalId, 'executed');
           
@@ -516,9 +520,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
               mt5PositionId: positionId || null,
             });
           }
+
+          // Broadcast updated signal
+          const updatedSignal = await storage.getSignalById(command.signalId);
+          if (updatedSignal) {
+            broadcast({
+              type: 'signal',
+              data: updatedSignal,
+            });
+          }
         }
       } else {
+        // Trade execution failed
         await storage.markCommandAsFailed(commandId, errorMessage || 'Unknown error');
+        
+        // Update signal status to failed
+        if (command?.signalId) {
+          await storage.updateSignalStatus(command.signalId, 'failed', errorMessage || 'Trade execution failed in MT5');
+          
+          // Broadcast updated signal with error
+          const updatedSignal = await storage.getSignalById(command.signalId);
+          if (updatedSignal) {
+            broadcast({
+              type: 'signal',
+              data: updatedSignal,
+            });
+          }
+        }
       }
 
       // Broadcast stats update
