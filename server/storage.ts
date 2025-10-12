@@ -155,8 +155,12 @@ export class MemStorage implements IStorage {
       mt5Login: insertSettings.mt5Login ?? null,
       mt5Password: insertSettings.mt5Password ?? null,
       webhookUrl: insertSettings.webhookUrl ?? null,
-      accountBalance: insertSettings.accountBalance || '10000',
-      riskPercentage: insertSettings.riskPercentage || '1',
+      accountBalance: typeof insertSettings.accountBalance === 'number' 
+        ? insertSettings.accountBalance.toString() 
+        : insertSettings.accountBalance || '10000',
+      riskPercentage: typeof insertSettings.riskPercentage === 'number'
+        ? insertSettings.riskPercentage.toString()
+        : insertSettings.riskPercentage || '1',
       defaultLotSize: insertSettings.defaultLotSize || '0.01',
       autoTrade: insertSettings.autoTrade || 'true',
       maxSpread: insertSettings.maxSpread ?? null,

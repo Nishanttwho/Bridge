@@ -62,6 +62,9 @@ export const insertTradeSchema = createInsertSchema(trades).omit({
 
 export const insertSettingsSchema = createInsertSchema(settings).omit({ 
   id: true 
+}).extend({
+  accountBalance: z.coerce.number().positive("Account balance must be positive"),
+  riskPercentage: z.coerce.number().positive("Risk percentage must be positive").max(100, "Risk percentage cannot exceed 100%"),
 });
 
 // Types

@@ -31,6 +31,8 @@ function calculateLotSize(accountBalance: number, riskPercentage: number, slPips
   const lotSize = riskAmount / riskPerStandardLot;
   
   // Return with 2 decimal places, minimum 0.01
+  // Note: For very small balances (<$200), the minimum 0.01 lot will result in
+  // slightly higher than configured risk percentage due to broker minimum lot sizes
   return Math.max(0.01, Number(lotSize.toFixed(2))).toString();
 }
 

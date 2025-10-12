@@ -32,6 +32,8 @@ const settingsSchema = z.object({
   mt5Server: z.string().optional(),
   mt5Login: z.string().optional(),
   mt5Password: z.string().optional(),
+  accountBalance: z.string().min(1, "Account balance is required"),
+  riskPercentage: z.string().min(1, "Risk percentage is required"),
   defaultLotSize: z.string().min(1, "Lot size is required"),
   maxSpread: z.string().optional(),
   slippage: z.string().optional(),
@@ -59,6 +61,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       mt5Server: '',
       mt5Login: '',
       mt5Password: '',
+      accountBalance: '10000',
+      riskPercentage: '1',
       defaultLotSize: '0.01',
       maxSpread: '3',
       slippage: '3',
@@ -72,6 +76,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         mt5Server: settings.mt5Server || '',
         mt5Login: settings.mt5Login || '',
         mt5Password: settings.mt5Password || '',
+        accountBalance: settings.accountBalance || '10000',
+        riskPercentage: settings.riskPercentage || '1',
         defaultLotSize: settings.defaultLotSize || '0.01',
         maxSpread: settings.maxSpread?.toString() || '3',
         slippage: settings.slippage?.toString() || '3',
@@ -84,6 +90,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     mutationFn: async (data: SettingsForm) => {
       return apiRequest('POST', '/api/settings', {
         ...data,
+        accountBalance: data.accountBalance,
+        riskPercentage: data.riskPercentage,
         defaultLotSize: data.defaultLotSize, // Keep as string
         maxSpread: data.maxSpread ? parseInt(data.maxSpread) : 3,
         slippage: data.slippage ? parseInt(data.slippage) : 3,
@@ -220,6 +228,38 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold">Trading Parameters</h3>
 
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="accountBalance"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account Balance ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" min="0" {...field} data-testid="input-account-balance" />
+                        </FormControl>
+                        <FormDescription>Your account balance for risk calculation</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="riskPercentage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Risk Per Trade (%)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" min="0.1" max="100" {...field} data-testid="input-risk-percentage" />
+                        </FormControl>
+                        <FormDescription>Percentage of account to risk (default: 1%)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-3">
                   <FormField
                     control={form.control}
@@ -230,6 +270,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         <FormControl>
                           <Input type="number" step="0.01" min="0.01" {...field} data-testid="input-lot-size" />
                         </FormControl>
+                        <FormDescription>Auto-calculated based on risk</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
