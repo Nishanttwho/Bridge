@@ -21,6 +21,8 @@ export interface IStorage {
   getTrades(limit?: number): Promise<Trade[]>;
   getTradeById(id: string): Promise<Trade | undefined>;
   updateTradeStatus(id: string, status: string): Promise<void>;
+  getOpenTradesByType(type: string): Promise<Trade[]>;
+  closeTrade(id: string, closePrice: string, profit: string): Promise<void>;
   
   // Settings
   getSettings(): Promise<Settings | undefined>;
@@ -49,6 +51,9 @@ export class MemStorage implements IStorage {
       id,
       timestamp: new Date(),
       status: insertSignal.status || 'pending',
+      source: insertSignal.source || 'tradingview',
+      price: insertSignal.price ?? null,
+      errorMessage: insertSignal.errorMessage ?? null,
     };
     this.signals.set(id, signal);
     return signal;
@@ -84,6 +89,15 @@ export class MemStorage implements IStorage {
       id,
       openTime: new Date(),
       status: insertTrade.status || 'open',
+      signalId: insertTrade.signalId ?? null,
+      openPrice: insertTrade.openPrice ?? null,
+      closePrice: insertTrade.closePrice ?? null,
+      stopLoss: insertTrade.stopLoss ?? null,
+      takeProfit: insertTrade.takeProfit ?? null,
+      profit: insertTrade.profit ?? null,
+      mt5OrderId: insertTrade.mt5OrderId ?? null,
+      closeTime: insertTrade.closeTime ?? null,
+      errorMessage: insertTrade.errorMessage ?? null,
     };
     this.trades.set(id, trade);
     return trade;
@@ -111,6 +125,22 @@ export class MemStorage implements IStorage {
     }
   }
 
+  async getOpenTradesByType(type: string): Promise<Trade[]> {
+    const allTrades = Array.from(this.trades.values());
+    return allTrades.filter(t => t.status === 'open' && t.type === type);
+  }
+
+  async closeTrade(id: string, closePrice: string, profit: string): Promise<void> {
+    const trade = this.trades.get(id);
+    if (trade) {
+      trade.status = 'closed';
+      trade.closePrice = closePrice;
+      trade.profit = profit;
+      trade.closeTime = new Date();
+      this.trades.set(id, trade);
+    }
+  }
+
   // Settings
   async getSettings(): Promise<Settings | undefined> {
     return this.settings;
@@ -121,6 +151,16 @@ export class MemStorage implements IStorage {
     const settings: Settings = {
       ...insertSettings,
       id,
+      mt5Server: insertSettings.mt5Server ?? null,
+      mt5Login: insertSettings.mt5Login ?? null,
+      mt5Password: insertSettings.mt5Password ?? null,
+      webhookUrl: insertSettings.webhookUrl ?? null,
+      accountBalance: insertSettings.accountBalance || '10000',
+      riskPercentage: insertSettings.riskPercentage || '1',
+      defaultLotSize: insertSettings.defaultLotSize || '0.01',
+      autoTrade: insertSettings.autoTrade || 'true',
+      maxSpread: insertSettings.maxSpread ?? null,
+      slippage: insertSettings.slippage ?? null,
     };
     this.settings = settings;
     return settings;
