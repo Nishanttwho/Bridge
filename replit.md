@@ -39,23 +39,22 @@ An automated trading bridge that receives trading signals from TradingView indic
 4. Set the webhook URL in alert settings
 5. Configure alert message to include signal type and symbol
 
-### MT5 Configuration (ZeroMQ Bridge)
+### MT5 Configuration (HTTP Polling)
 1. **Install MT5 Expert Advisor**:
-   - Copy ZeroMQ DLL files to MT5/Libraries folder
-   - Install ZeroMQ MQL5 library in MT5/Include folder
-   - Copy TradingViewZMQ_EA.mq5 to MT5/Experts folder
+   - Copy TradingViewHTTP_EA.mq5 to MT5/Experts folder
    - Compile EA in MetaEditor
    - See `mt5-files/INSTALLATION_GUIDE.md` for detailed steps
 
 2. **Configure MT5 Terminal**:
-   - Enable "Allow DLL imports" in Tools → Options
-   - Attach TradingViewZMQ_EA to any chart
+   - Enable "Allow automated trading" in Tools → Options
+   - Whitelist your Replit app URL in "Allow WebRequest for listed URLs"
+   - Attach TradingViewHTTP_EA to any chart
+   - Configure EA inputs: ServerURL and ApiSecret
    - Verify EA is running (check Experts tab logs)
 
 3. **Configure Application Settings**:
    - Open Settings dialog in the app
-   - Set ZMQ Host (localhost or VPS IP address)
-   - Set Push Port (default: 5555) and Pull Port (default: 5556)
+   - Set MT5 API Secret (must match EA ApiSecret)
    - Configure account balance and risk parameters
    - Toggle auto-trade on/off as needed
 
@@ -67,11 +66,12 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
-- ✅ **Migrated from MetaApi to ZeroMQ** (FREE alternative, faster execution)
-- ✅ Created MT5 Expert Advisor for ZeroMQ bridge (TradingViewZMQ_EA.mq5)
-- ✅ Updated settings form for ZeroMQ configuration (host, ports)
-- ✅ Rewrote MT5Service to use ZeroMQ sockets (PUSH/PULL pattern)
-- ✅ Added comprehensive installation guide for MT5 setup
+- ✅ **Migrated to HTTP polling system** (replaced ZeroMQ for ultimate simplicity)
+- ✅ Created MT5 Expert Advisor using built-in WebRequest() function (TradingViewHTTP_EA.mq5)
+- ✅ Implemented command queue system with automatic retry/timeout (30s timeout)
+- ✅ Built REST API endpoints for MT5 polling (/api/mt5/next-command and /api/mt5/report)
+- ✅ Added heartbeat tracking on every poll for accurate connection status
+- ✅ Updated installation guide with simplified 5-minute setup (just URL whitelisting)
 - ✅ Complete schema definitions for signals, trades, and settings
 - ✅ Built comprehensive dashboard with real-time stats cards
 - ✅ Created signals table with live WebSocket updates
