@@ -342,6 +342,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // MT5 Polling Endpoint - Get next pending command
+  app.get("/api/mt5/next-command", async (req, res) => {
+    try {
+      // Verify API secret
+      const settings = await storage.getSettings();
+      const apiSecret = req.headers['x-mt5-api-secret'] as string;
+      
+      if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      // Update heartbeat
+      await storage.updateMt5Heartbeat();
+
+      // Get next pending command
+      const command = await storage.getNextPendingCommand();
+      
+      if (!command) {
+        // No commands - return 204 No Content
+        return res.status(204).send();
+      }
+
+      // Mark as sent
+      await storage.markCommandAsSent(command.id);
+
+      // Return command
+      res.json({
+        id: command.id,
+        action: command.action,
+        symbol: command.symbol,
+        type: command.type,
+        volume: command.volume ? parseFloat(command.volume) : undefined,
+        stopLoss: command.stopLoss ? parseFloat(command.stopLoss) : undefined,
+        takeProfit: command.takeProfit ? parseFloat(command.takeProfit) : undefined,
+        positionId: command.positionId,
+      });
+
+      // Broadcast stats update (connection status)
+      const stats = await storage.getStats();
+      broadcast({
+        type: 'stats',
+        data: stats,
+      });
+    } catch (error) {
+      console.error('MT5 polling error:', error);
+      res.status(500).json({ error: "Failed to get next command" });
+    }
+  });
+
+  // MT5 Report Endpoint - Receive execution results
+  app.post("/api/mt5/report", async (req, res) => {
+    try {
+      // Verify API secret
+      const settings = await storage.getSettings();
+      const apiSecret = req.headers['x-mt5-api-secret'] as string;
+      
+      if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { commandId, success, orderId, positionId, error: errorMessage } = req.body;
+
+      if (!commandId) {
+        return res.status(400).json({ error: "commandId is required" });
+      }
+
+      // Update heartbeat
+      await storage.updateMt5Heartbeat();
+
+      // Store execution result
+      await storage.createExecutionResult({
+        commandId,
+        success: success ? 'true' : 'false',
+        orderId: orderId || null,
+        positionId: positionId || null,
+        errorMessage: errorMessage || null,
+        responseData: JSON.stringify(req.body),
+      });
+
+      // Mark command as acknowledged or failed
+      if (success) {
+        await storage.markCommandAsAcknowledged(commandId);
+        
+        // Get the command to find associated signal
+        const command = await storage.getNextPendingCommand();
+        // In a real implementation, we'd query the specific command by ID
+        // For now, we'll update the signal status if signalId exists
+        if (command?.signalId) {
+          await storage.updateSignalStatus(command.signalId, 'executed');
+          
+          // Create trade record
+          if (command.action === 'TRADE' && command.symbol && command.type) {
+            await storage.createTrade({
+              signalId: command.signalId,
+              symbol: command.symbol,
+              type: command.type,
+              volume: command.volume || '0.01',
+              openPrice: null,
+              stopLoss: command.stopLoss || null,
+              takeProfit: command.takeProfit || null,
+              status: 'open',
+              mt5OrderId: orderId || null,
+              mt5PositionId: positionId || null,
+            });
+          }
+        }
+      } else {
+        await storage.markCommandAsFailed(commandId, errorMessage || 'Unknown error');
+      }
+
+      // Broadcast stats update
+      const stats = await storage.getStats();
+      broadcast({
+        type: 'stats',
+        data: stats,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('MT5 report error:', error);
+      res.status(500).json({ error: "Failed to process report" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // WebSocket server setup
