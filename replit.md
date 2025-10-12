@@ -14,7 +14,7 @@ An automated trading bridge that receives trading signals from TradingView indic
 ### Backend (Express + TypeScript)
 - **Webhook Endpoint**: Receives TradingView alerts via POST /api/webhook
 - **WebSocket Server**: Broadcasts real-time updates to connected clients
-- **MT5 Integration**: Executes trades based on received signals
+- **MT5 Integration**: ZeroMQ bridge for direct MT5 communication (FREE alternative to MetaApi)
 - **In-Memory Storage**: Fast signal and trade tracking
 
 ### Data Models
@@ -39,12 +39,25 @@ An automated trading bridge that receives trading signals from TradingView indic
 4. Set the webhook URL in alert settings
 5. Configure alert message to include signal type and symbol
 
-### MT5 Configuration
-1. Open Settings dialog
-2. Enter your MT5 server address
-3. Provide login credentials
-4. Configure default lot size and risk parameters
-5. Toggle auto-trade on/off as needed
+### MT5 Configuration (ZeroMQ Bridge)
+1. **Install MT5 Expert Advisor**:
+   - Copy ZeroMQ DLL files to MT5/Libraries folder
+   - Install ZeroMQ MQL5 library in MT5/Include folder
+   - Copy TradingViewZMQ_EA.mq5 to MT5/Experts folder
+   - Compile EA in MetaEditor
+   - See `mt5-files/INSTALLATION_GUIDE.md` for detailed steps
+
+2. **Configure MT5 Terminal**:
+   - Enable "Allow DLL imports" in Tools → Options
+   - Attach TradingViewZMQ_EA to any chart
+   - Verify EA is running (check Experts tab logs)
+
+3. **Configure Application Settings**:
+   - Open Settings dialog in the app
+   - Set ZMQ Host (localhost or VPS IP address)
+   - Set Push Port (default: 5555) and Pull Port (default: 5556)
+   - Configure account balance and risk parameters
+   - Toggle auto-trade on/off as needed
 
 ## Technology Stack
 - **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
@@ -54,6 +67,11 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **Migrated from MetaApi to ZeroMQ** (FREE alternative, faster execution)
+- ✅ Created MT5 Expert Advisor for ZeroMQ bridge (TradingViewZMQ_EA.mq5)
+- ✅ Updated settings form for ZeroMQ configuration (host, ports)
+- ✅ Rewrote MT5Service to use ZeroMQ sockets (PUSH/PULL pattern)
+- ✅ Added comprehensive installation guide for MT5 setup
 - ✅ Complete schema definitions for signals, trades, and settings
 - ✅ Built comprehensive dashboard with real-time stats cards
 - ✅ Created signals table with live WebSocket updates
