@@ -5,7 +5,11 @@ import {
   type InsertTrade,
   type Settings,
   type InsertSettings,
-  type DashboardStats 
+  type DashboardStats,
+  type Mt5Command,
+  type InsertMt5Command,
+  type Mt5ExecutionResult,
+  type InsertMt5ExecutionResult
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -27,6 +31,18 @@ export interface IStorage {
   // Settings
   getSettings(): Promise<Settings | undefined>;
   upsertSettings(settings: InsertSettings): Promise<Settings>;
+  updateMt5Heartbeat(): Promise<void>;
+  
+  // MT5 Command Queue
+  enqueueCommand(command: InsertMt5Command): Promise<Mt5Command>;
+  getNextPendingCommand(): Promise<Mt5Command | undefined>;
+  markCommandAsSent(commandId: string): Promise<void>;
+  markCommandAsAcknowledged(commandId: string): Promise<void>;
+  markCommandAsFailed(commandId: string, errorMessage: string): Promise<void>;
+  getPendingCommands(): Promise<Mt5Command[]>;
+  
+  // MT5 Execution Results
+  createExecutionResult(result: InsertMt5ExecutionResult): Promise<Mt5ExecutionResult>;
   
   // Stats
   getStats(): Promise<DashboardStats>;
@@ -36,11 +52,15 @@ export class MemStorage implements IStorage {
   private signals: Map<string, Signal>;
   private trades: Map<string, Trade>;
   private settings: Settings | undefined;
+  private mt5Commands: Map<string, Mt5Command>;
+  private mt5ExecutionResults: Map<string, Mt5ExecutionResult>;
 
   constructor() {
     this.signals = new Map();
     this.trades = new Map();
     this.settings = undefined;
+    this.mt5Commands = new Map();
+    this.mt5ExecutionResults = new Map();
   }
 
   // Signals
@@ -96,6 +116,7 @@ export class MemStorage implements IStorage {
       takeProfit: insertTrade.takeProfit ?? null,
       profit: insertTrade.profit ?? null,
       mt5OrderId: insertTrade.mt5OrderId ?? null,
+      mt5PositionId: insertTrade.mt5PositionId ?? null,
       closeTime: insertTrade.closeTime ?? null,
       errorMessage: insertTrade.errorMessage ?? null,
     };
@@ -151,11 +172,7 @@ export class MemStorage implements IStorage {
     const settings: Settings = {
       ...insertSettings,
       id,
-      mt5Server: insertSettings.mt5Server ?? null,
-      mt5Login: insertSettings.mt5Login ?? null,
-      mt5Password: insertSettings.mt5Password ?? null,
-      metaApiToken: insertSettings.metaApiToken ?? null,
-      metaApiAccountId: insertSettings.metaApiAccountId ?? null,
+      mt5ApiSecret: insertSettings.mt5ApiSecret ?? null,
       webhookUrl: insertSettings.webhookUrl ?? null,
       accountBalance: typeof insertSettings.accountBalance === 'number' 
         ? insertSettings.accountBalance.toString() 
@@ -167,9 +184,97 @@ export class MemStorage implements IStorage {
       autoTrade: insertSettings.autoTrade || 'true',
       maxSpread: insertSettings.maxSpread ?? null,
       slippage: insertSettings.slippage ?? null,
+      lastMt5Heartbeat: this.settings?.lastMt5Heartbeat ?? null,
     };
     this.settings = settings;
     return settings;
+  }
+
+  async updateMt5Heartbeat(): Promise<void> {
+    if (this.settings) {
+      this.settings.lastMt5Heartbeat = new Date();
+    }
+  }
+
+  // MT5 Command Queue
+  async enqueueCommand(insertCommand: InsertMt5Command): Promise<Mt5Command> {
+    const id = randomUUID();
+    const command: Mt5Command = {
+      ...insertCommand,
+      id,
+      symbol: insertCommand.symbol ?? null,
+      type: insertCommand.type ?? null,
+      volume: insertCommand.volume ?? null,
+      stopLoss: insertCommand.stopLoss ?? null,
+      takeProfit: insertCommand.takeProfit ?? null,
+      positionId: insertCommand.positionId ?? null,
+      signalId: insertCommand.signalId ?? null,
+      status: 'pending',
+      createdAt: new Date(),
+      sentAt: null,
+      acknowledgedAt: null,
+      errorMessage: insertCommand.errorMessage ?? null,
+    };
+    this.mt5Commands.set(id, command);
+    return command;
+  }
+
+  async getNextPendingCommand(): Promise<Mt5Command | undefined> {
+    const allCommands = Array.from(this.mt5Commands.values());
+    const pendingCommands = allCommands
+      .filter(c => c.status === 'pending')
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    return pendingCommands[0];
+  }
+
+  async markCommandAsSent(commandId: string): Promise<void> {
+    const command = this.mt5Commands.get(commandId);
+    if (command) {
+      command.status = 'sent';
+      command.sentAt = new Date();
+      this.mt5Commands.set(commandId, command);
+    }
+  }
+
+  async markCommandAsAcknowledged(commandId: string): Promise<void> {
+    const command = this.mt5Commands.get(commandId);
+    if (command) {
+      command.status = 'acknowledged';
+      command.acknowledgedAt = new Date();
+      this.mt5Commands.set(commandId, command);
+    }
+  }
+
+  async markCommandAsFailed(commandId: string, errorMessage: string): Promise<void> {
+    const command = this.mt5Commands.get(commandId);
+    if (command) {
+      command.status = 'failed';
+      command.errorMessage = errorMessage;
+      this.mt5Commands.set(commandId, command);
+    }
+  }
+
+  async getPendingCommands(): Promise<Mt5Command[]> {
+    const allCommands = Array.from(this.mt5Commands.values());
+    return allCommands.filter(c => c.status === 'pending');
+  }
+
+  // MT5 Execution Results
+  async createExecutionResult(insertResult: InsertMt5ExecutionResult): Promise<Mt5ExecutionResult> {
+    const id = randomUUID();
+    const result: Mt5ExecutionResult = {
+      ...insertResult,
+      id,
+      commandId: insertResult.commandId ?? null,
+      orderId: insertResult.orderId ?? null,
+      positionId: insertResult.positionId ?? null,
+      executedAt: new Date(),
+      errorMessage: insertResult.errorMessage ?? null,
+      responseData: insertResult.responseData ?? null,
+    };
+    this.mt5ExecutionResults.set(id, result);
+    return result;
   }
 
   // Stats
@@ -186,12 +291,19 @@ export class MemStorage implements IStorage {
       ? (executedSignals / totalSignals) * 100 
       : 0;
 
+    // Check if MT5 is connected (heartbeat within last 10 seconds)
+    const now = new Date();
+    const lastHeartbeat = this.settings?.lastMt5Heartbeat;
+    const isConnected = lastHeartbeat 
+      ? (now.getTime() - new Date(lastHeartbeat).getTime()) < 10000 
+      : false;
+
     return {
       totalSignals,
       pendingSignals,
       executedTrades,
       successRate: Math.round(successRate),
-      isConnected: this.settings?.metaApiToken ? true : false,
+      isConnected,
     };
   }
 }
