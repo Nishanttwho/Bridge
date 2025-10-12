@@ -189,7 +189,17 @@ export class MemStorage implements IStorage {
   }
 
   async updateMt5Heartbeat(): Promise<void> {
-    if (this.settings) {
+    if (!this.settings) {
+      // Create default settings if they don't exist
+      this.settings = {
+        id: 'default',
+        mt5ApiSecret: null,
+        accountBalance: '10000',
+        riskPercentage: '1',
+        autoTrade: 'true',
+        lastMt5Heartbeat: new Date(),
+      };
+    } else {
       this.settings.lastMt5Heartbeat = new Date();
     }
   }
