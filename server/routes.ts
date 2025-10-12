@@ -265,6 +265,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate signal
       const validatedSignal = insertSignalSchema.parse(signalData);
       
+      // Check for duplicate signals (same symbol + type within last 5 seconds)
+      const recentSignals = await storage.getSignals(10);
+      const now = Date.now();
+      const fiveSecondsAgo = now - 5000;
+      
+      const isDuplicate = recentSignals.some(s => {
+        const signalTime = new Date(s.timestamp).getTime();
+        return (
+          s.symbol === validatedSignal.symbol &&
+          s.type === validatedSignal.type &&
+          signalTime >= fiveSecondsAgo &&
+          s.status !== 'failed' // Allow retrying failed signals
+        );
+      });
+      
+      if (isDuplicate) {
+        console.log(`Duplicate signal detected: ${validatedSignal.type} ${validatedSignal.symbol}, skipping`);
+        return res.json({ 
+          success: true, 
+          message: 'Duplicate signal ignored',
+          note: 'Signal received but already processed recently'
+        });
+      }
+      
       // Create signal
       const signal = await storage.createSignal(validatedSignal);
 
@@ -277,33 +301,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if auto-trade is enabled
       const settings = await storage.getSettings();
       if (settings && settings.autoTrade === 'true') {
-        // Calculate lot size and stop loss
+        // Get configured TP/SL settings
+        const slPips = parseFloat(settings.defaultSlPips || '20');
+        const tpPips = parseFloat(settings.defaultTpPips || '30');
+        const accountBalance = parseFloat(settings.accountBalance || '10000');
+        const riskPercentage = parseFloat(settings.riskPercentage || '1');
+        
+        // Calculate SL and TP prices
         const entryPrice = parseFloat(signal.price || '0');
-        const slPips = 20;
         const pipValue = 0.0001;
         const slDistance = slPips * pipValue;
+        const tpDistance = tpPips * pipValue;
         
         let stopLoss: number | null = null;
+        let takeProfit: number | null = null;
+        
         if (entryPrice > 0) {
           if (signal.type === 'BUY') {
             stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
+            takeProfit = parseFloat((entryPrice + tpDistance).toFixed(5));
           } else {
             stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
+            takeProfit = parseFloat((entryPrice - tpDistance).toFixed(5));
           }
         }
 
-        const accountBalance = parseFloat(settings.accountBalance || '10000');
-        const riskPercentage = parseFloat(settings.riskPercentage || '1');
+        // Calculate lot size based on configured risk
         const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
 
-        // Enqueue command for MT5 to execute (use mapped MT5 symbol)
+        // Auto-close opposite positions if enabled (same symbol only)
+        const autoCloseOnOppositeSignal = settings.autoCloseOnOppositeSignal === 'true';
+        if (autoCloseOnOppositeSignal) {
+          const oppositeType = signal.type === 'BUY' ? 'SELL' : 'BUY';
+          const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
+          
+          // Filter to only close trades for the SAME symbol
+          const oppositeTradesForSymbol = oppositeTrades.filter(t => t.symbol === signal.symbol);
+          
+          for (const oppositeTrade of oppositeTradesForSymbol) {
+            const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
+            if (positionId) {
+              // Queue close command
+              await storage.enqueueCommand({
+                action: 'CLOSE',
+                positionId: positionId,
+                status: 'pending',
+              });
+            }
+            
+            // Mark trade as closing
+            const closePrice = signal.price || oppositeTrade.openPrice || '0';
+            const profit = calculateProfit(oppositeTrade, closePrice);
+            await storage.closeTrade(oppositeTrade.id, closePrice, profit);
+          }
+        }
+
+        // Enqueue TRADE command for MT5 to execute
         await storage.enqueueCommand({
           action: 'TRADE',
           symbol: signal.symbol,
           type: signal.type,
           volume: volume.toString(),
           stopLoss: stopLoss ? stopLoss.toString() : null,
-          takeProfit: null,
+          takeProfit: takeProfit ? takeProfit.toString() : null,
           signalId: signal.id,
           status: 'pending',
         });
