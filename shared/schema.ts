@@ -71,11 +71,7 @@ export const settings = pgTable("settings", {
   mt5ApiSecret: text("mt5_api_secret"), // Shared secret for MT5 authentication
   accountBalance: decimal("account_balance", { precision: 15, scale: 2 }).notNull().default('10000'), // Account balance for risk calculation
   riskPercentage: decimal("risk_percentage", { precision: 5, scale: 2 }).notNull().default('1'), // Risk per trade (1%)
-  defaultLotSize: decimal("default_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'),
-  maxSpread: integer("max_spread").default(3),
-  slippage: integer("slippage").default(3),
   autoTrade: text("auto_trade").notNull().default('true'), // 'true' | 'false'
-  webhookUrl: text("webhook_url"),
   lastMt5Heartbeat: timestamp("last_mt5_heartbeat"), // Last time MT5 polled
 });
 

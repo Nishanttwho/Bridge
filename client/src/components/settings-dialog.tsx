@@ -29,14 +29,9 @@ import { useState } from "react";
 import type { Settings } from "@shared/schema";
 
 const settingsSchema = z.object({
-  zmqHost: z.string().min(1, "ZMQ host is required"),
-  zmqPushPort: z.coerce.number().min(1, "Push port must be greater than 0").max(65535, "Invalid port number"),
-  zmqPullPort: z.coerce.number().min(1, "Pull port must be greater than 0").max(65535, "Invalid port number"),
+  mt5ApiSecret: z.string().min(1, "MT5 API Secret is required"),
   accountBalance: z.string().min(1, "Account balance is required"),
   riskPercentage: z.string().min(1, "Risk percentage is required"),
-  defaultLotSize: z.string().min(1, "Lot size is required"),
-  maxSpread: z.string().optional(),
-  slippage: z.string().optional(),
   autoTrade: z.string(),
 });
 
@@ -58,14 +53,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsSchema),
     defaultValues: {
-      zmqHost: 'localhost',
-      zmqPushPort: 5555,
-      zmqPullPort: 5556,
+      mt5ApiSecret: '',
       accountBalance: '10000',
       riskPercentage: '1',
-      defaultLotSize: '0.01',
-      maxSpread: '3',
-      slippage: '3',
       autoTrade: 'true',
     },
   });
@@ -73,14 +63,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   useEffect(() => {
     if (settings) {
       form.reset({
-        zmqHost: settings.zmqHost || 'localhost',
-        zmqPushPort: settings.zmqPushPort || 5555,
-        zmqPullPort: settings.zmqPullPort || 5556,
+        mt5ApiSecret: settings.mt5ApiSecret || '',
         accountBalance: settings.accountBalance || '10000',
         riskPercentage: settings.riskPercentage || '1',
-        defaultLotSize: settings.defaultLotSize || '0.01',
-        maxSpread: settings.maxSpread?.toString() || '3',
-        slippage: settings.slippage?.toString() || '3',
         autoTrade: settings.autoTrade || 'true',
       });
     }
@@ -89,19 +74,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const mutation = useMutation({
     mutationFn: async (data: SettingsForm) => {
       return apiRequest('POST', '/api/settings', {
-        ...data,
+        mt5ApiSecret: data.mt5ApiSecret,
         accountBalance: data.accountBalance,
         riskPercentage: data.riskPercentage,
-        defaultLotSize: data.defaultLotSize,
-        maxSpread: data.maxSpread ? parseInt(data.maxSpread) : 3,
-        slippage: data.slippage ? parseInt(data.slippage) : 3,
+        autoTrade: data.autoTrade,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
       toast({
         title: "Settings saved",
-        description: "Your MT5 ZeroMQ configuration has been updated successfully.",
+        description: "Your MT5 HTTP polling configuration has been updated successfully.",
       });
       onOpenChange(false);
     },
@@ -134,7 +117,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Configure your MetaTrader 5 ZeroMQ connection and trading parameters
+            Configure your MetaTrader 5 HTTP polling connection and trading parameters
           </DialogDescription>
         </DialogHeader>
 
@@ -174,14 +157,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
               </div>
 
-              {/* ZeroMQ Connection */}
+              {/* MT5 HTTP Connection */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">ZeroMQ Connection (FREE)</h3>
+                  <h3 className="text-sm font-semibold">MT5 HTTP Polling Connection</h3>
                   <a 
-                    href="https://github.com/dingmaotu/mql-zmq" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.open('/mt5-files/INSTALLATION_GUIDE.md', '_blank');
+                    }}
                     className="text-xs text-primary hover:underline flex items-center gap-1"
                   >
                     Installation Guide
@@ -189,69 +174,34 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   </a>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connect directly to MT5 via ZeroMQ bridge. Requires MT5 Expert Advisor installed on your VPS/PC.
+                  Connect MT5 using built-in WebRequest (no external libraries needed). MT5 polls this server every second.
                 </p>
                 
                 <FormField
                   control={form.control}
-                  name="zmqHost"
+                  name="mt5ApiSecret"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ZMQ Host</FormLabel>
+                      <FormLabel>MT5 API Secret</FormLabel>
                       <FormControl>
-                        <Input placeholder="localhost or VPS IP address" {...field} data-testid="input-zmq-host" />
+                        <Input 
+                          type="password" 
+                          placeholder="Enter a secret key for MT5 authentication" 
+                          {...field} 
+                          data-testid="input-mt5-api-secret" 
+                        />
                       </FormControl>
                       <FormDescription>
-                        Use 'localhost' if MT5 is on same machine, or your VPS IP address
+                        This must match the ApiSecret in your MT5 Expert Advisor settings
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="zmqPushPort"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Push Port (Send Commands)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            data-testid="input-zmq-push-port" 
-                          />
-                        </FormControl>
-                        <FormDescription>Default: 5555</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="zmqPullPort"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Pull Port (Receive Responses)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            {...field} 
-                            data-testid="input-zmq-pull-port" 
-                          />
-                        </FormControl>
-                        <FormDescription>Default: 5556</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    📋 <strong>Setup Required:</strong> Install the TradingViewZMQ_EA.mq5 Expert Advisor in your MT5 terminal. 
+                <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3">
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    📋 <strong>Setup Required:</strong> Install the TradingViewHTTP_EA.mq5 Expert Advisor in your MT5 terminal. 
                     Check the <code className="bg-background/50 px-1 rounded">mt5-files/INSTALLATION_GUIDE.md</code> for complete instructions.
                   </p>
                 </div>
@@ -286,56 +236,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         <FormControl>
                           <Input type="number" step="0.1" min="0.1" max="100" {...field} data-testid="input-risk-percentage" />
                         </FormControl>
-                        <FormDescription>Percentage of account to risk (default: 1%)</FormDescription>
+                        <FormDescription>Percentage of account to risk per trade</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <FormField
-                    control={form.control}
-                    name="defaultLotSize"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Default Lot Size</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" min="0.01" {...field} data-testid="input-lot-size" />
-                        </FormControl>
-                        <FormDescription>Auto-calculated based on risk</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="maxSpread"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Max Spread (pips)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} data-testid="input-max-spread" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="slippage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Slippage (pips)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} data-testid="input-slippage" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="rounded-lg border border-muted bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    ℹ️ Lot size is automatically calculated based on your risk percentage and a 20-pip stop loss
+                  </p>
                 </div>
 
                 <FormField
