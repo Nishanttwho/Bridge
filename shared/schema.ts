@@ -29,6 +29,7 @@ export const trades = pgTable("trades", {
   profit: decimal("profit", { precision: 10, scale: 2 }),
   status: text("status").notNull().default('open'), // 'open' | 'closed' | 'failed'
   mt5OrderId: text("mt5_order_id"),
+  mt5PositionId: text("mt5_position_id"), // MetaApi position ID for closing
   openTime: timestamp("open_time").notNull().defaultNow(),
   closeTime: timestamp("close_time"),
   errorMessage: text("error_message"),

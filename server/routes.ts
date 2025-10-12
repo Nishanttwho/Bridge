@@ -84,11 +84,12 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
     const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
     
     for (const oppositeTrade of oppositeTrades) {
-      if (oppositeTrade.mt5OrderId) {
-        // Close position in MT5 - use position ID from mt5OrderId
-        const closeResult = await mt5Service.closePosition(oppositeTrade.mt5OrderId);
+      // Use position ID if available, otherwise fall back to order ID
+      const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
+      if (positionId) {
+        const closeResult = await mt5Service.closePosition(positionId);
         if (!closeResult.success) {
-          console.error(`Failed to close position ${oppositeTrade.mt5OrderId}: ${closeResult.error}`);
+          console.error(`Failed to close position ${positionId}: ${closeResult.error}`);
         }
       }
       
@@ -129,7 +130,7 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       return;
     }
 
-    // Create trade record - prioritize positionId for closing trades later
+    // Create trade record - store both orderId and positionId
     const trade = await storage.createTrade({
       signalId,
       symbol,
@@ -139,7 +140,8 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       stopLoss: stopLoss.toString(),
       takeProfit: null,
       status: 'open',
-      mt5OrderId: mt5Result.positionId || `MT5-${Date.now()}`,
+      mt5OrderId: mt5Result.orderId || `MT5-${Date.now()}`,
+      mt5PositionId: mt5Result.positionId || null,
     });
 
     // Update signal status
