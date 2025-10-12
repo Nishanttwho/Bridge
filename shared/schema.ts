@@ -35,12 +35,40 @@ export const trades = pgTable("trades", {
   errorMessage: text("error_message"),
 });
 
+// MT5 Command Queue - commands waiting to be executed by MT5
+export const mt5Commands = pgTable("mt5_commands", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  action: text("action").notNull(), // 'TRADE' | 'CLOSE' | 'PING'
+  symbol: text("symbol"),
+  type: text("type"), // 'BUY' | 'SELL'
+  volume: decimal("volume", { precision: 10, scale: 2 }),
+  stopLoss: decimal("stop_loss", { precision: 10, scale: 5 }),
+  takeProfit: decimal("take_profit", { precision: 10, scale: 5 }),
+  positionId: text("position_id"), // For CLOSE action
+  signalId: varchar("signal_id").references(() => signals.id),
+  status: text("status").notNull().default('pending'), // 'pending' | 'sent' | 'acknowledged' | 'failed'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  sentAt: timestamp("sent_at"),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  errorMessage: text("error_message"),
+});
+
+// MT5 Execution Results - results reported back from MT5
+export const mt5ExecutionResults = pgTable("mt5_execution_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  commandId: varchar("command_id").references(() => mt5Commands.id),
+  success: text("success").notNull(), // 'true' | 'false'
+  orderId: text("order_id"),
+  positionId: text("position_id"),
+  executedAt: timestamp("executed_at").notNull().defaultNow(),
+  errorMessage: text("error_message"),
+  responseData: text("response_data"), // JSON string of full response
+});
+
 // MT5 Settings
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  zmqHost: text("zmq_host").default('localhost'), // ZeroMQ host (localhost or VPS IP)
-  zmqPushPort: integer("zmq_push_port").default(5555), // Port for sending commands
-  zmqPullPort: integer("zmq_pull_port").default(5556), // Port for receiving responses
+  mt5ApiSecret: text("mt5_api_secret"), // Shared secret for MT5 authentication
   accountBalance: decimal("account_balance", { precision: 15, scale: 2 }).notNull().default('10000'), // Account balance for risk calculation
   riskPercentage: decimal("risk_percentage", { precision: 5, scale: 2 }).notNull().default('1'), // Risk per trade (1%)
   defaultLotSize: decimal("default_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'),
@@ -48,6 +76,7 @@ export const settings = pgTable("settings", {
   slippage: integer("slippage").default(3),
   autoTrade: text("auto_trade").notNull().default('true'), // 'true' | 'false'
   webhookUrl: text("webhook_url"),
+  lastMt5Heartbeat: timestamp("last_mt5_heartbeat"), // Last time MT5 polled
 });
 
 // Schemas for inserts
@@ -68,6 +97,18 @@ export const insertSettingsSchema = createInsertSchema(settings).omit({
   riskPercentage: z.coerce.number().positive("Risk percentage must be positive").max(100, "Risk percentage cannot exceed 100%"),
 });
 
+export const insertMt5CommandSchema = createInsertSchema(mt5Commands).omit({ 
+  id: true, 
+  createdAt: true,
+  sentAt: true,
+  acknowledgedAt: true
+});
+
+export const insertMt5ExecutionResultSchema = createInsertSchema(mt5ExecutionResults).omit({ 
+  id: true, 
+  executedAt: true 
+});
+
 // Types
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
@@ -77,6 +118,12 @@ export type InsertTrade = z.infer<typeof insertTradeSchema>;
 
 export type Settings = typeof settings.$inferSelect;
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
+
+export type Mt5Command = typeof mt5Commands.$inferSelect;
+export type InsertMt5Command = z.infer<typeof insertMt5CommandSchema>;
+
+export type Mt5ExecutionResult = typeof mt5ExecutionResults.$inferSelect;
+export type InsertMt5ExecutionResult = z.infer<typeof insertMt5ExecutionResultSchema>;
 
 // Dashboard stats type
 export type DashboardStats = {
