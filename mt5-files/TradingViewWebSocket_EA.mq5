@@ -4,7 +4,7 @@
 //|                           Real-time Command Execution            |
 //+------------------------------------------------------------------+
 #property copyright "TradingView Signal Executor - WebSocket Version"
-#property version   "1.00"
+#property version   "2.00"
 #property strict
 
 // Input parameters
@@ -13,7 +13,10 @@ input string ApiSecret = "your-secret-key-here";   // API secret for authenticat
 input double MaxSlippagePercent = 0.5;             // Max slippage as % of entry price
 
 // Global variables
-string wsUrl;
+string wsHost;
+int wsPort;
+string wsPath;
+bool useSSL;
 int wsHandle = -1;
 bool isConnected = false;
 ENUM_ORDER_TYPE_FILLING brokerFillingMode;
@@ -30,14 +33,10 @@ int OnInit()
    brokerFillingMode = DetectBrokerFillingMode();
    Print("Detected broker filling mode: ", EnumToString(brokerFillingMode));
    
-   // Build WebSocket URL
-   // Convert https:// to wss:// or http:// to ws://
-   wsUrl = ServerURL;
-   StringReplace(wsUrl, "https://", "wss://");
-   StringReplace(wsUrl, "http://", "ws://");
-   wsUrl = wsUrl + "/mt5-ws?secret=" + ApiSecret;
+   // Parse WebSocket URL
+   ParseWebSocketURL();
    
-   Print("WebSocket URL: ", wsUrl);
+   Print("WebSocket: ", (useSSL ? "wss://" : "ws://"), wsHost, ":", wsPort, wsPath);
    Print("IMPORTANT: Add this URL to WebRequest whitelist:");
    Print("Tools -> Options -> Expert Advisors -> Allow WebRequest for:");
    Print(ServerURL);
@@ -87,6 +86,73 @@ void OnTimer()
 }
 
 //+------------------------------------------------------------------+
+//| Parse WebSocket URL                                              |
+//+------------------------------------------------------------------+
+void ParseWebSocketURL()
+{
+   string url = ServerURL;
+   
+   // Convert http(s):// to ws(s):// and determine SSL
+   if(StringFind(url, "https://") == 0)
+   {
+      useSSL = true;
+      wsPort = 443;
+      url = StringSubstr(url, 8);  // Remove "https://"
+   }
+   else if(StringFind(url, "http://") == 0)
+   {
+      useSSL = false;
+      wsPort = 80;
+      url = StringSubstr(url, 7);  // Remove "http://"
+   }
+   else if(StringFind(url, "wss://") == 0)
+   {
+      useSSL = true;
+      wsPort = 443;
+      url = StringSubstr(url, 6);  // Remove "wss://"
+   }
+   else if(StringFind(url, "ws://") == 0)
+   {
+      useSSL = false;
+      wsPort = 80;
+      url = StringSubstr(url, 5);  // Remove "ws://"
+   }
+   else
+   {
+      // No scheme - default to secure
+      useSSL = true;
+      wsPort = 443;
+   }
+   
+   // Extract path
+   int pathStart = StringFind(url, "/");
+   if(pathStart > 0)
+   {
+      wsPath = StringSubstr(url, pathStart);
+      wsHost = StringSubstr(url, 0, pathStart);
+   }
+   else
+   {
+      wsPath = "/mt5-ws";
+      wsHost = url;
+   }
+   
+   // Add API secret to path
+   if(StringFind(wsPath, "?") < 0)
+      wsPath += "?secret=" + ApiSecret;
+   else
+      wsPath += "&secret=" + ApiSecret;
+   
+   // Check for port in host
+   int portPos = StringFind(wsHost, ":");
+   if(portPos > 0)
+   {
+      wsPort = (int)StringToInteger(StringSubstr(wsHost, portPos + 1));
+      wsHost = StringSubstr(wsHost, 0, portPos);
+   }
+}
+
+//+------------------------------------------------------------------+
 //| Connect to WebSocket server                                      |
 //+------------------------------------------------------------------+
 void ConnectWebSocket()
@@ -97,43 +163,7 @@ void ConnectWebSocket()
       wsHandle = -1;
    }
    
-   // Extract host and path from URL
-   string host = "";
-   string path = "/mt5-ws?secret=" + ApiSecret;
-   int port = 443;  // Default HTTPS port
-   bool useSSL = true;
-   
-   // Parse URL
-   if(StringFind(wsUrl, "wss://") == 0)
-   {
-      host = StringSubstr(wsUrl, 6);
-      useSSL = true;
-      port = 443;
-   }
-   else if(StringFind(wsUrl, "ws://") == 0)
-   {
-      host = StringSubstr(wsUrl, 5);
-      useSSL = false;
-      port = 80;
-   }
-   
-   // Extract host and path
-   int pathStart = StringFind(host, "/");
-   if(pathStart > 0)
-   {
-      path = StringSubstr(host, pathStart);
-      host = StringSubstr(host, 0, pathStart);
-   }
-   
-   // Check for port in host
-   int portPos = StringFind(host, ":");
-   if(portPos > 0)
-   {
-      port = (int)StringToInteger(StringSubstr(host, portPos + 1));
-      host = StringSubstr(host, 0, portPos);
-   }
-   
-   Print("[WS] Connecting to: ", host, ":", port, path);
+   Print("[WS] Connecting to ", wsHost, ":", wsPort, wsPath, " (SSL: ", (useSSL ? "Yes" : "No"), ")");
    
    // Create socket
    wsHandle = SocketCreate();
@@ -143,8 +173,12 @@ void ConnectWebSocket()
       return;
    }
    
-   // Connect socket
-   if(!SocketConnect(wsHandle, host, port, 5000))
+   // Set socket timeout
+   SocketTimeouts(wsHandle, 5000, 5000, 5000);
+   
+   // Connect to server
+   // Port 443 automatically enables TLS
+   if(!SocketConnect(wsHandle, wsHost, wsPort, 5000))
    {
       int error = GetLastError();
       Print("[WS ERROR] Failed to connect: ", error);
@@ -155,17 +189,33 @@ void ConnectWebSocket()
       return;
    }
    
-   // Send WebSocket handshake
+   Print("[WS] Socket connected", (useSSL ? " (TLS enabled automatically on port 443)" : ""));
+   
+   // Build and send WebSocket handshake
    string handshake = 
-      "GET " + path + " HTTP/1.1\r\n" +
-      "Host: " + host + "\r\n" +
+      "GET " + wsPath + " HTTP/1.1\r\n" +
+      "Host: " + wsHost + "\r\n" +
       "Upgrade: websocket\r\n" +
       "Connection: Upgrade\r\n" +
       "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n" +
       "Sec-WebSocket-Version: 13\r\n" +
       "\r\n";
    
-   if(SocketSend(wsHandle, handshake, StringLen(handshake)) < 0)
+   // Send handshake (use TLS send if SSL)
+   int sent;
+   if(useSSL)
+   {
+      uchar handshakeBytes[];
+      StringToCharArray(handshake, handshakeBytes, 0, WHOLE_ARRAY, CP_UTF8);
+      ArrayResize(handshakeBytes, ArraySize(handshakeBytes) - 1);  // Remove null terminator
+      sent = SocketTlsSend(wsHandle, handshakeBytes, ArraySize(handshakeBytes));
+   }
+   else
+   {
+      sent = SocketSend(wsHandle, handshake, StringLen(handshake));
+   }
+   
+   if(sent < 0)
    {
       Print("[WS ERROR] Failed to send handshake: ", GetLastError());
       SocketClose(wsHandle);
@@ -175,22 +225,35 @@ void ConnectWebSocket()
    
    // Read handshake response
    string response = "";
-   char buffer[];
+   uchar buffer[];
    uint timeout = GetTickCount() + 5000;
    
    while(GetTickCount() < timeout)
    {
-      int received = SocketIsReadable(wsHandle);
+      int received;
+      if(useSSL)
+      {
+         received = SocketTlsReadAvailable(wsHandle, buffer, 4096);
+      }
+      else
+      {
+         int readable = SocketIsReadable(wsHandle);
+         if(readable > 0)
+         {
+            ArrayResize(buffer, readable);
+            received = SocketRead(wsHandle, buffer, readable, 100);
+         }
+         else
+         {
+            received = 0;
+         }
+      }
+      
       if(received > 0)
       {
-         ArrayResize(buffer, received);
-         int bytes = SocketRead(wsHandle, buffer, received, 100);
-         if(bytes > 0)
-         {
-            response += CharArrayToString(buffer, 0, bytes);
-            if(StringFind(response, "\r\n\r\n") >= 0)
-               break;
-         }
+         response += CharArrayToString(buffer, 0, received, CP_UTF8);
+         if(StringFind(response, "\r\n\r\n") >= 0)
+            break;
       }
       Sleep(10);
    }
@@ -204,7 +267,7 @@ void ConnectWebSocket()
    }
    else
    {
-      Print("[WS ERROR] Handshake failed. Response: ", response);
+      Print("[WS ERROR] Handshake failed. Response: ", StringSubstr(response, 0, 200));
       SocketClose(wsHandle);
       wsHandle = -1;
       isConnected = false;
@@ -219,14 +282,23 @@ void CheckForMessages()
    if(wsHandle < 0 || !isConnected)
       return;
    
-   int readable = SocketIsReadable(wsHandle);
-   if(readable <= 0)
-      return;
+   uchar buffer[];
+   int bytes;
    
-   char buffer[];
-   ArrayResize(buffer, readable);
+   if(useSSL)
+   {
+      bytes = SocketTlsReadAvailable(wsHandle, buffer, 4096);
+   }
+   else
+   {
+      int readable = SocketIsReadable(wsHandle);
+      if(readable <= 0)
+         return;
+      
+      ArrayResize(buffer, readable);
+      bytes = SocketRead(wsHandle, buffer, readable, 100);
+   }
    
-   int bytes = SocketRead(wsHandle, buffer, readable, 100);
    if(bytes <= 0)
       return;
    
@@ -241,7 +313,7 @@ void CheckForMessages()
 //+------------------------------------------------------------------+
 //| Decode WebSocket frame                                           |
 //+------------------------------------------------------------------+
-string DecodeWebSocketFrame(char &buffer[], int length)
+string DecodeWebSocketFrame(uchar &buffer[], int length)
 {
    if(length < 2)
       return "";
@@ -279,75 +351,107 @@ string DecodeWebSocketFrame(char &buffer[], int length)
    }
    else if(payloadLength == 127)
    {
-      // 64-bit length (not commonly needed)
-      offset = 10;
+      offset = 10;  // 64-bit length
    }
    
    // Extract payload
    if(offset + payloadLength > length)
       return "";
    
-   char payload[];
+   uchar payload[];
    ArrayResize(payload, (int)payloadLength);
    ArrayCopy(payload, buffer, 0, offset, (int)payloadLength);
    
-   return CharArrayToString(payload);
+   return CharArrayToString(payload, 0, -1, CP_UTF8);
 }
 
 //+------------------------------------------------------------------+
-//| Send WebSocket message                                           |
+//| Send WebSocket message with masking (required for client frames) |
 //+------------------------------------------------------------------+
 bool SendWebSocketMessage(string message)
 {
    if(wsHandle < 0 || !isConnected)
       return false;
    
-   // Create WebSocket frame
-   char frame[];
-   char messageBytes[];
-   StringToCharArray(message, messageBytes);
+   // Convert message to bytes
+   uchar messageBytes[];
+   StringToCharArray(message, messageBytes, 0, WHOLE_ARRAY, CP_UTF8);
    int messageLen = ArraySize(messageBytes) - 1;  // Exclude null terminator
    
-   int frameSize = 2 + messageLen;
+   // Calculate frame size
+   int frameSize = 6 + messageLen;  // Header(2) + Mask(4) + Payload
    if(messageLen > 125)
-      frameSize += 2;
+      frameSize += 2;  // Extended length
    
+   uchar frame[];
    ArrayResize(frame, frameSize);
    
    // FIN bit + opcode 1 (text)
    frame[0] = 0x81;
    
-   // Payload length
+   // Mask bit + payload length
    int offset = 2;
    if(messageLen <= 125)
    {
-      frame[1] = (char)messageLen;
+      frame[1] = 0x80 | (uchar)messageLen;  // Mask bit set + length
    }
    else
    {
-      frame[1] = 126;
-      frame[2] = (char)((messageLen >> 8) & 0xFF);
-      frame[3] = (char)(messageLen & 0xFF);
+      frame[1] = 0x80 | 126;  // Mask bit + extended length indicator
+      frame[2] = (uchar)((messageLen >> 8) & 0xFF);
+      frame[3] = (uchar)(messageLen & 0xFF);
       offset = 4;
    }
    
-   // Copy payload
-   ArrayCopy(frame, messageBytes, offset, 0, messageLen);
+   // Generate random mask key (required for client frames)
+   uchar mask[4];
+   for(int i = 0; i < 4; i++)
+      mask[i] = (uchar)(MathRand() % 256);
+   
+   // Copy mask to frame
+   for(int i = 0; i < 4; i++)
+      frame[offset + i] = mask[i];
+   offset += 4;
+   
+   // Mask and copy payload
+   for(int i = 0; i < messageLen; i++)
+      frame[offset + i] = messageBytes[i] ^ mask[i % 4];
    
    // Send frame
-   int sent = SocketSend(wsHandle, frame, frameSize);
+   int sent;
+   if(useSSL)
+   {
+      sent = SocketTlsSend(wsHandle, frame, frameSize);
+   }
+   else
+   {
+      sent = SocketSend(wsHandle, frame, frameSize);
+   }
+   
    return sent == frameSize;
 }
 
 //+------------------------------------------------------------------+
-//| Send pong response                                               |
+//| Send pong response (must be masked for client frames)            |
 //+------------------------------------------------------------------+
 void SendPong()
 {
-   char frame[2];
+   // Pong frame with masking (required for all client frames)
+   uchar frame[6];  // Header(2) + Mask(4) + no payload
+   
    frame[0] = 0x8A;  // FIN + opcode 10 (pong)
-   frame[1] = 0x00;  // No payload
-   SocketSend(wsHandle, frame, 2);
+   frame[1] = 0x80;  // Mask bit set + 0 length
+   
+   // Generate random mask key (required even for zero-length payload)
+   for(int i = 0; i < 4; i++)
+      frame[2 + i] = (uchar)(MathRand() % 256);
+   
+   // No payload to mask, but mask key is still required
+   
+   if(useSSL)
+      SocketTlsSend(wsHandle, frame, 6);
+   else
+      SocketSend(wsHandle, frame, 6);
 }
 
 //+------------------------------------------------------------------+
