@@ -75,6 +75,14 @@ export const settings = pgTable("settings", {
   lastMt5Heartbeat: timestamp("last_mt5_heartbeat"), // Last time MT5 polled
 });
 
+// Symbol Mappings - Map TradingView symbols to MT5 symbols
+export const symbolMappings = pgTable("symbol_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tradingViewSymbol: text("tradingview_symbol").notNull().unique(), // e.g., 'BTCUSD'
+  mt5Symbol: text("mt5_symbol").notNull(), // e.g., 'BTCUSDm'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Schemas for inserts
 export const insertSignalSchema = createInsertSchema(signals).omit({ 
   id: true, 
@@ -105,6 +113,11 @@ export const insertMt5ExecutionResultSchema = createInsertSchema(mt5ExecutionRes
   executedAt: true 
 });
 
+export const insertSymbolMappingSchema = createInsertSchema(symbolMappings).omit({ 
+  id: true, 
+  createdAt: true 
+});
+
 // Types
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
@@ -120,6 +133,9 @@ export type InsertMt5Command = z.infer<typeof insertMt5CommandSchema>;
 
 export type Mt5ExecutionResult = typeof mt5ExecutionResults.$inferSelect;
 export type InsertMt5ExecutionResult = z.infer<typeof insertMt5ExecutionResultSchema>;
+
+export type SymbolMapping = typeof symbolMappings.$inferSelect;
+export type InsertSymbolMapping = z.infer<typeof insertSymbolMappingSchema>;
 
 // Dashboard stats type
 export type DashboardStats = {
