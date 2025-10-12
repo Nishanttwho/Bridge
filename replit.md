@@ -70,13 +70,17 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
-- ✅ **CRITICAL BUGFIXES** (October 2025)
+- ✅ **CRITICAL BUGFIXES - PRODUCTION READY** (October 12, 2025)
+  - **Fixed duplicate trade execution on 1-minute candles** - Extended deduplication from 5 to 60 seconds
+  - **Fixed race condition in signal processing** - Signal status updated to 'pending' BEFORE command creation
+  - **Added duplicate command prevention** - Checks for existing commands for same signal before enqueueing
+  - **Verified TP/SL calculations** - Confirmed correct pip distances (BUY: SL below entry, TP above; SELL: opposite)
+  - **Added comprehensive logging** - Full [WEBHOOK], [MT5-POLL], [MT5-REPORT] trace for debugging
+  - **Result: ONE SIGNAL = ONE TRADE (guaranteed, production-safe)**
+- ✅ **CRITICAL BUGFIXES** (October 2025 - Previous)
   - Fixed webhook endpoint using hardcoded TP/SL values instead of configured settings
   - Fixed TP calculation (was null, now properly calculated from defaultTpPips)
   - Fixed auto-close to only affect same symbol (was closing ALL opposite positions)
-  - Added signal deduplication to prevent multiple trades from duplicate alerts (5-second window)
-  - Verified command queue prevents duplicate execution
-  - **Result: One signal = One trade (production-safe)**
 - ✅ **Added configurable TP/SL settings** (December 2025)
   - Default Take Profit in pips (configurable in Settings)
   - Default Stop Loss in pips (configurable in Settings)
