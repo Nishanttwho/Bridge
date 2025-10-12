@@ -62,48 +62,56 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       return;
     }
 
-    // Calculate SL based on trade type (20 pips = 0.0020 for most pairs)
-    const slPips = 20;
+    // Calculate SL and TP based on settings
+    const slPips = parseFloat(settings.defaultSlPips || '20');
+    const tpPips = parseFloat(settings.defaultTpPips || '30');
     const pipValue = 0.0001; // 1 pip for most forex pairs
     const slDistance = slPips * pipValue;
+    const tpDistance = tpPips * pipValue;
     
     let stopLoss: number;
+    let takeProfit: number;
     if (type === 'BUY') {
       stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
+      takeProfit = parseFloat((entryPrice + tpDistance).toFixed(5));
     } else {
       stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
+      takeProfit = parseFloat((entryPrice - tpDistance).toFixed(5));
     }
 
-    // Calculate lot size based on 1% risk
+    // Calculate lot size based on risk settings
     const accountBalance = parseFloat(settings.accountBalance || '10000');
     const riskPercentage = parseFloat(settings.riskPercentage || '1');
     const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
 
-    // Close opposite trades before opening new one
-    const oppositeType = type === 'BUY' ? 'SELL' : 'BUY';
-    const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
-    
-    for (const oppositeTrade of oppositeTrades) {
-      // Use position ID if available, otherwise fall back to order ID
-      const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
-      if (positionId) {
-        const closeResult = await mt5Service.closePosition(positionId);
-        if (!closeResult.success) {
-          console.error(`Failed to close position ${positionId}: ${closeResult.error}`);
+    // Close opposite trades before opening new one (if enabled)
+    const autoCloseOnOppositeSignal = settings.autoCloseOnOppositeSignal === 'true';
+    if (autoCloseOnOppositeSignal) {
+      const oppositeType = type === 'BUY' ? 'SELL' : 'BUY';
+      const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
+      
+      for (const oppositeTrade of oppositeTrades) {
+        // Use position ID if available, otherwise fall back to order ID
+        const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
+        if (positionId) {
+          const closeResult = await mt5Service.closePosition(positionId);
+          if (!closeResult.success) {
+            console.error(`Failed to close position ${positionId}: ${closeResult.error}`);
+          }
         }
-      }
-      
-      const closePrice = price || oppositeTrade.openPrice || '0';
-      const profit = calculateProfit(oppositeTrade, closePrice);
-      await storage.closeTrade(oppositeTrade.id, closePrice, profit);
-      
-      // Broadcast closed trade
-      const closedTrade = await storage.getTradeById(oppositeTrade.id);
-      if (closedTrade) {
-        broadcast({
-          type: 'trade',
-          data: closedTrade,
-        });
+        
+        const closePrice = price || oppositeTrade.openPrice || '0';
+        const profit = calculateProfit(oppositeTrade, closePrice);
+        await storage.closeTrade(oppositeTrade.id, closePrice, profit);
+        
+        // Broadcast closed trade
+        const closedTrade = await storage.getTradeById(oppositeTrade.id);
+        if (closedTrade) {
+          broadcast({
+            type: 'trade',
+            data: closedTrade,
+          });
+        }
       }
     }
 
@@ -113,7 +121,7 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       type: type as 'BUY' | 'SELL',
       volume,
       stopLoss,
-      takeProfit: undefined
+      takeProfit
     });
 
     if (!mt5Result.success) {
@@ -138,7 +146,7 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       volume: volume.toString(),
       openPrice: price || '0',
       stopLoss: stopLoss.toString(),
-      takeProfit: null,
+      takeProfit: takeProfit.toString(),
       status: 'open',
       mt5OrderId: mt5Result.orderId || `MT5-${Date.now()}`,
       mt5PositionId: mt5Result.positionId || null,

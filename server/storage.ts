@@ -186,13 +186,12 @@ export class MemStorage implements IStorage {
       ...insertSettings,
       id,
       mt5ApiSecret: insertSettings.mt5ApiSecret ?? null,
-      accountBalance: typeof insertSettings.accountBalance === 'number' 
-        ? insertSettings.accountBalance.toString() 
-        : insertSettings.accountBalance || '10000',
-      riskPercentage: typeof insertSettings.riskPercentage === 'number'
-        ? insertSettings.riskPercentage.toString()
-        : insertSettings.riskPercentage || '1',
+      accountBalance: insertSettings.accountBalance || '10000',
+      riskPercentage: insertSettings.riskPercentage || '1',
+      defaultTpPips: insertSettings.defaultTpPips || '30',
+      defaultSlPips: insertSettings.defaultSlPips || '20',
       autoTrade: insertSettings.autoTrade || 'true',
+      autoCloseOnOppositeSignal: insertSettings.autoCloseOnOppositeSignal || 'true',
       lastMt5Heartbeat: this.settings?.lastMt5Heartbeat ?? null,
     };
     this.settings = settings;
@@ -207,7 +206,10 @@ export class MemStorage implements IStorage {
         mt5ApiSecret: null,
         accountBalance: '10000',
         riskPercentage: '1',
+        defaultTpPips: '30',
+        defaultSlPips: '20',
         autoTrade: 'true',
+        autoCloseOnOppositeSignal: 'true',
         lastMt5Heartbeat: new Date(),
       };
     } else {

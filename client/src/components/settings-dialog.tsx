@@ -40,7 +40,10 @@ const settingsSchema = z.object({
   mt5ApiSecret: z.string().min(1, "MT5 API Secret is required"),
   accountBalance: z.string().min(1, "Account balance is required"),
   riskPercentage: z.string().min(1, "Risk percentage is required"),
+  defaultTpPips: z.string().min(1, "Take profit in pips is required"),
+  defaultSlPips: z.string().min(1, "Stop loss in pips is required"),
   autoTrade: z.string(),
+  autoCloseOnOppositeSignal: z.string(),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -70,7 +73,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       mt5ApiSecret: '',
       accountBalance: '10000',
       riskPercentage: '1',
+      defaultTpPips: '30',
+      defaultSlPips: '20',
       autoTrade: 'true',
+      autoCloseOnOppositeSignal: 'true',
     },
   });
 
@@ -80,7 +86,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         mt5ApiSecret: settings.mt5ApiSecret || '',
         accountBalance: settings.accountBalance || '10000',
         riskPercentage: settings.riskPercentage || '1',
+        defaultTpPips: settings.defaultTpPips || '30',
+        defaultSlPips: settings.defaultSlPips || '20',
         autoTrade: settings.autoTrade || 'true',
+        autoCloseOnOppositeSignal: settings.autoCloseOnOppositeSignal || 'true',
       });
     }
   }, [settings, form]);
@@ -91,7 +100,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         mt5ApiSecret: data.mt5ApiSecret,
         accountBalance: data.accountBalance,
         riskPercentage: data.riskPercentage,
+        defaultTpPips: data.defaultTpPips,
+        defaultSlPips: data.defaultSlPips,
         autoTrade: data.autoTrade,
+        autoCloseOnOppositeSignal: data.autoCloseOnOppositeSignal,
       });
     },
     onSuccess: () => {
@@ -302,9 +314,41 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   />
                 </div>
 
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="defaultSlPips"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Default Stop Loss (Pips)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" min="0.1" {...field} data-testid="input-default-sl-pips" />
+                        </FormControl>
+                        <FormDescription>Default SL distance in pips</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="defaultTpPips"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Default Take Profit (Pips)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" min="0.1" {...field} data-testid="input-default-tp-pips" />
+                        </FormControl>
+                        <FormDescription>Default TP distance in pips</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <div className="rounded-lg border border-muted bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">
-                    ℹ️ Lot size is automatically calculated based on your risk percentage and a 20-pip stop loss
+                    ℹ️ Lot size is automatically calculated based on your risk percentage and stop loss pips
                   </p>
                 </div>
 
@@ -324,6 +368,28 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                           checked={field.value === 'true'}
                           onCheckedChange={(checked) => field.onChange(checked ? 'true' : 'false')}
                           data-testid="switch-auto-trade"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="autoCloseOnOppositeSignal"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border bg-card p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Auto Close on Opposite Signal</FormLabel>
+                        <FormDescription>
+                          Automatically close BUY positions when SELL signal comes (and vice versa)
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value === 'true'}
+                          onCheckedChange={(checked) => field.onChange(checked ? 'true' : 'false')}
+                          data-testid="switch-auto-close-opposite"
                         />
                       </FormControl>
                     </FormItem>
