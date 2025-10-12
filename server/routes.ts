@@ -265,32 +265,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate signal
       const validatedSignal = insertSignalSchema.parse(signalData);
       
-      // Check for duplicate signals (same symbol + type within last 5 seconds)
-      const recentSignals = await storage.getSignals(10);
+      console.log(`[WEBHOOK] Received signal: ${validatedSignal.type} ${validatedSignal.symbol} @ ${validatedSignal.price}`);
+      
+      // CRITICAL FIX 1: Extend duplicate check to 60 seconds (for 1-minute candles)
+      // CRITICAL FIX 2: Check for signals that are 'pending' or 'executed' to prevent duplicates
+      const recentSignals = await storage.getSignals(100);
       const now = Date.now();
-      const fiveSecondsAgo = now - 5000;
+      const sixtySecondsAgo = now - 60000; // Changed from 5 seconds to 60 seconds
       
       const isDuplicate = recentSignals.some(s => {
         const signalTime = new Date(s.timestamp).getTime();
         return (
           s.symbol === validatedSignal.symbol &&
           s.type === validatedSignal.type &&
-          signalTime >= fiveSecondsAgo &&
+          signalTime >= sixtySecondsAgo &&
           s.status !== 'failed' // Allow retrying failed signals
         );
       });
       
       if (isDuplicate) {
-        console.log(`Duplicate signal detected: ${validatedSignal.type} ${validatedSignal.symbol}, skipping`);
+        console.log(`[WEBHOOK] Duplicate signal detected: ${validatedSignal.type} ${validatedSignal.symbol}, skipping`);
         return res.json({ 
           success: true, 
           message: 'Duplicate signal ignored',
-          note: 'Signal received but already processed recently'
+          note: 'Signal received but already processed recently (within 60 seconds)'
         });
       }
       
       // Create signal
       const signal = await storage.createSignal(validatedSignal);
+      console.log(`[WEBHOOK] Created signal ID: ${signal.id}`);
 
       // Broadcast signal to WebSocket clients
       broadcast({
@@ -307,9 +311,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const accountBalance = parseFloat(settings.accountBalance || '10000');
         const riskPercentage = parseFloat(settings.riskPercentage || '1');
         
+        console.log(`[WEBHOOK] Settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
+        
         // Calculate SL and TP prices
         const entryPrice = parseFloat(signal.price || '0');
-        const pipValue = 0.0001;
+        const pipValue = 0.0001; // Standard for 5-digit forex pairs
         const slDistance = slPips * pipValue;
         const tpDistance = tpPips * pipValue;
         
@@ -320,14 +326,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (signal.type === 'BUY') {
             stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
             takeProfit = parseFloat((entryPrice + tpDistance).toFixed(5));
-          } else {
+          } else { // SELL
             stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
             takeProfit = parseFloat((entryPrice - tpDistance).toFixed(5));
           }
+          
+          console.log(`[WEBHOOK] Calculated - Entry: ${entryPrice}, SL: ${stopLoss} (${slPips} pips), TP: ${takeProfit} (${tpPips} pips)`);
         }
 
         // Calculate lot size based on configured risk
         const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
+        console.log(`[WEBHOOK] Calculated volume: ${volume}`);
+
+        // CRITICAL FIX 3: Update signal status to 'pending' BEFORE enqueueing command
+        await storage.updateSignalStatus(signal.id, 'pending');
+
+        // CRITICAL FIX 4: Check if there's already a pending command for this signal
+        const pendingCommands = await storage.getPendingCommands();
+        const existingCommand = pendingCommands.find(cmd => cmd.signalId === signal.id);
+        
+        if (existingCommand) {
+          console.log(`[WEBHOOK] Command already exists for signal ${signal.id}, skipping duplicate command creation`);
+          return res.json({ 
+            success: true, 
+            signalId: signal.id,
+            message: 'Signal already has pending command, prevented duplicate' 
+          });
+        }
 
         // Auto-close opposite positions if enabled (same symbol only)
         const autoCloseOnOppositeSignal = settings.autoCloseOnOppositeSignal === 'true';
@@ -338,6 +363,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Filter to only close trades for the SAME symbol
           const oppositeTradesForSymbol = oppositeTrades.filter(t => t.symbol === signal.symbol);
           
+          console.log(`[WEBHOOK] Found ${oppositeTradesForSymbol.length} opposite trades to close for ${signal.symbol}`);
+          
           for (const oppositeTrade of oppositeTradesForSymbol) {
             const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
             if (positionId) {
@@ -347,6 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 positionId: positionId,
                 status: 'pending',
               });
+              console.log(`[WEBHOOK] Queued close command for position ${positionId}`);
             }
             
             // Mark trade as closing
@@ -357,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Enqueue TRADE command for MT5 to execute
-        await storage.enqueueCommand({
+        const tradeCommand = await storage.enqueueCommand({
           action: 'TRADE',
           symbol: signal.symbol,
           type: signal.type,
@@ -368,8 +396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'pending',
         });
 
-        // Update signal status to show it's queued
-        await storage.updateSignalStatus(signal.id, 'pending');
+        console.log(`[WEBHOOK] Enqueued trade command ${tradeCommand.id} for signal ${signal.id}`);
       }
 
       res.json({ 
@@ -378,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Signal received and queued for execution' 
       });
     } catch (error) {
-      console.error('Webhook error:', error);
+      console.error('[WEBHOOK] Error:', error);
       res.status(400).json({ 
         error: "Invalid signal data",
         details: error instanceof Error ? error.message : 'Unknown error'
@@ -489,6 +516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const apiSecret = req.headers['x-mt5-api-secret'] as string;
       
       if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
+        console.log('[MT5-POLL] Unauthorized access attempt');
         return res.status(401).json({ error: "Unauthorized" });
       }
 
@@ -499,12 +527,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const command = await storage.getNextPendingCommand();
       
       if (!command) {
-        // No commands - return 204 No Content
+        // No commands - return 204 No Content (this is normal, happens every second)
         return res.status(204).send();
       }
 
       // Mark as sent
       await storage.markCommandAsSent(command.id);
+
+      console.log(`[MT5-POLL] Sending command ${command.id} to MT5: ${command.action} ${command.symbol || ''} ${command.type || ''}`);
+      if (command.stopLoss || command.takeProfit) {
+        console.log(`[MT5-POLL] SL: ${command.stopLoss}, TP: ${command.takeProfit}`);
+      }
 
       // Return command
       res.json({
@@ -525,7 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: stats,
       });
     } catch (error) {
-      console.error('MT5 polling error:', error);
+      console.error('[MT5-POLL] Error:', error);
       res.status(500).json({ error: "Failed to get next command" });
     }
   });
@@ -538,17 +571,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const apiSecret = req.headers['x-mt5-api-secret'] as string;
       
       if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
+        console.log('[MT5-REPORT] Unauthorized access attempt');
         return res.status(401).json({ error: "Unauthorized" });
       }
 
       const { commandId, success, orderId, positionId, error: errorMessage } = req.body;
 
       if (!commandId) {
+        console.log('[MT5-REPORT] Missing commandId in report');
         return res.status(400).json({ error: "commandId is required" });
       }
 
       // Log the report for debugging
-      console.log(`MT5 Report: commandId=${commandId}, success=${success}, error=${errorMessage || 'none'}`);
+      console.log(`[MT5-REPORT] Received - commandId: ${commandId}, success: ${success}, orderId: ${orderId || 'none'}, positionId: ${positionId || 'none'}, error: ${errorMessage || 'none'}`);
 
       // Update heartbeat
       await storage.updateMt5Heartbeat();
@@ -565,17 +600,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the command to find associated signal
       const command = await storage.getCommandById(commandId);
+      
+      if (!command) {
+        console.log(`[MT5-REPORT] WARNING: Command ${commandId} not found in storage`);
+        return res.json({ success: true, warning: 'Command not found' });
+      }
+
+      console.log(`[MT5-REPORT] Command ${commandId} is for signal ${command.signalId || 'none'}, action: ${command.action}`);
 
       // Mark command as acknowledged or failed
       if (success) {
         await storage.markCommandAsAcknowledged(commandId);
+        console.log(`[MT5-REPORT] Command ${commandId} marked as acknowledged`);
         
         if (command?.signalId) {
           await storage.updateSignalStatus(command.signalId, 'executed');
+          console.log(`[MT5-REPORT] Signal ${command.signalId} marked as executed`);
           
           // Create trade record
           if (command.action === 'TRADE' && command.symbol && command.type) {
-            await storage.createTrade({
+            const trade = await storage.createTrade({
               signalId: command.signalId,
               symbol: command.symbol,
               type: command.type,
@@ -587,6 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               mt5OrderId: orderId || null,
               mt5PositionId: positionId || null,
             });
+            console.log(`[MT5-REPORT] Created trade record ${trade.id} for signal ${command.signalId}`);
           }
 
           // Broadcast updated signal
@@ -601,10 +646,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Trade execution failed
         await storage.markCommandAsFailed(commandId, errorMessage || 'Unknown error');
+        console.log(`[MT5-REPORT] Command ${commandId} marked as failed: ${errorMessage || 'Unknown error'}`);
         
         // Update signal status to failed
         if (command?.signalId) {
           await storage.updateSignalStatus(command.signalId, 'failed', errorMessage || 'Trade execution failed in MT5');
+          console.log(`[MT5-REPORT] Signal ${command.signalId} marked as failed`);
           
           // Broadcast updated signal with error
           const updatedSignal = await storage.getSignalById(command.signalId);
@@ -626,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      console.error('MT5 report error:', error);
+      console.error('[MT5-REPORT] Error:', error);
       res.status(500).json({ error: "Failed to process report" });
     }
   });
