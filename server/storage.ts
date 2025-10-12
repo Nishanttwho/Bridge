@@ -9,7 +9,9 @@ import {
   type Mt5Command,
   type InsertMt5Command,
   type Mt5ExecutionResult,
-  type InsertMt5ExecutionResult
+  type InsertMt5ExecutionResult,
+  type SymbolMapping,
+  type InsertSymbolMapping
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -46,6 +48,13 @@ export interface IStorage {
   // MT5 Execution Results
   createExecutionResult(result: InsertMt5ExecutionResult): Promise<Mt5ExecutionResult>;
   
+  // Symbol Mappings
+  createSymbolMapping(mapping: InsertSymbolMapping): Promise<SymbolMapping>;
+  getSymbolMappings(): Promise<SymbolMapping[]>;
+  getSymbolMappingByTradingViewSymbol(tradingViewSymbol: string): Promise<SymbolMapping | undefined>;
+  deleteSymbolMapping(id: string): Promise<void>;
+  mapSymbol(tradingViewSymbol: string): Promise<string>;
+  
   // Stats
   getStats(): Promise<DashboardStats>;
 }
@@ -56,6 +65,7 @@ export class MemStorage implements IStorage {
   private settings: Settings | undefined;
   private mt5Commands: Map<string, Mt5Command>;
   private mt5ExecutionResults: Map<string, Mt5ExecutionResult>;
+  private symbolMappings: Map<string, SymbolMapping>;
 
   constructor() {
     this.signals = new Map();
@@ -63,6 +73,7 @@ export class MemStorage implements IStorage {
     this.settings = undefined;
     this.mt5Commands = new Map();
     this.mt5ExecutionResults = new Map();
+    this.symbolMappings = new Map();
   }
 
   // Signals
@@ -312,6 +323,46 @@ export class MemStorage implements IStorage {
     };
     this.mt5ExecutionResults.set(id, result);
     return result;
+  }
+
+  // Symbol Mappings
+  async createSymbolMapping(insertMapping: InsertSymbolMapping): Promise<SymbolMapping> {
+    // Check if mapping already exists
+    const existing = Array.from(this.symbolMappings.values()).find(
+      m => m.tradingViewSymbol === insertMapping.tradingViewSymbol
+    );
+    if (existing) {
+      throw new Error(`Mapping for ${insertMapping.tradingViewSymbol} already exists`);
+    }
+
+    const id = randomUUID();
+    const mapping: SymbolMapping = {
+      ...insertMapping,
+      id,
+      createdAt: new Date(),
+    };
+    this.symbolMappings.set(id, mapping);
+    return mapping;
+  }
+
+  async getSymbolMappings(): Promise<SymbolMapping[]> {
+    return Array.from(this.symbolMappings.values())
+      .sort((a, b) => a.tradingViewSymbol.localeCompare(b.tradingViewSymbol));
+  }
+
+  async getSymbolMappingByTradingViewSymbol(tradingViewSymbol: string): Promise<SymbolMapping | undefined> {
+    return Array.from(this.symbolMappings.values()).find(
+      m => m.tradingViewSymbol === tradingViewSymbol
+    );
+  }
+
+  async deleteSymbolMapping(id: string): Promise<void> {
+    this.symbolMappings.delete(id);
+  }
+
+  async mapSymbol(tradingViewSymbol: string): Promise<string> {
+    const mapping = await this.getSymbolMappingByTradingViewSymbol(tradingViewSymbol);
+    return mapping ? mapping.mt5Symbol : tradingViewSymbol;
   }
 
   // Stats
