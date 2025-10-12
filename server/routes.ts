@@ -262,13 +262,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: signal,
       });
 
-      // Execute trade asynchronously
-      executeTrade(signal.id, signal.type, signal.symbol, signal.price || undefined);
+      // Check if auto-trade is enabled
+      const settings = await storage.getSettings();
+      if (settings && settings.autoTrade === 'true') {
+        // Calculate lot size and stop loss
+        const entryPrice = parseFloat(signal.price || '0');
+        const slPips = 20;
+        const pipValue = 0.0001;
+        const slDistance = slPips * pipValue;
+        
+        let stopLoss: number | null = null;
+        if (entryPrice > 0) {
+          if (signal.type === 'BUY') {
+            stopLoss = parseFloat((entryPrice - slDistance).toFixed(5));
+          } else {
+            stopLoss = parseFloat((entryPrice + slDistance).toFixed(5));
+          }
+        }
+
+        const accountBalance = parseFloat(settings.accountBalance || '10000');
+        const riskPercentage = parseFloat(settings.riskPercentage || '1');
+        const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
+
+        // Enqueue command for MT5 to execute
+        await storage.enqueueCommand({
+          action: 'TRADE',
+          symbol: signal.symbol,
+          type: signal.type,
+          volume: volume.toString(),
+          stopLoss: stopLoss ? stopLoss.toString() : null,
+          takeProfit: null,
+          signalId: signal.id,
+          status: 'pending',
+        });
+
+        // Update signal status to show it's queued
+        await storage.updateSignalStatus(signal.id, 'pending');
+      }
 
       res.json({ 
         success: true, 
         signalId: signal.id,
-        message: 'Signal received and processing' 
+        message: 'Signal received and queued for execution' 
       });
     } catch (error) {
       console.error('Webhook error:', error);
