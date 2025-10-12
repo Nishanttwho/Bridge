@@ -24,9 +24,17 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Copy, Check, ExternalLink } from "lucide-react";
+import { Loader2, Copy, Check, ExternalLink, Trash2, Plus } from "lucide-react";
 import { useState } from "react";
-import type { Settings } from "@shared/schema";
+import type { Settings, SymbolMapping } from "@shared/schema";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 const settingsSchema = z.object({
   mt5ApiSecret: z.string().min(1, "MT5 API Secret is required"),
@@ -45,9 +53,15 @@ interface SettingsDialogProps {
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [newTvSymbol, setNewTvSymbol] = useState('');
+  const [newMt5Symbol, setNewMt5Symbol] = useState('');
 
   const { data: settings, isLoading } = useQuery<Settings>({
     queryKey: ['/api/settings'],
+  });
+
+  const { data: symbolMappings = [] } = useQuery<SymbolMapping[]>({
+    queryKey: ['/api/symbol-mappings'],
   });
 
   const form = useForm<SettingsForm>({
@@ -92,6 +106,51 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       toast({
         title: "Error",
         description: "Failed to save settings. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addMappingMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/symbol-mappings', {
+        tradingViewSymbol: newTvSymbol.trim(),
+        mt5Symbol: newMt5Symbol.trim(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/symbol-mappings'] });
+      setNewTvSymbol('');
+      setNewMt5Symbol('');
+      toast({
+        title: "Symbol mapping added",
+        description: `${newTvSymbol} will now be mapped to ${newMt5Symbol}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add symbol mapping. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMappingMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest('DELETE', `/api/symbol-mappings/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/symbol-mappings'] });
+      toast({
+        title: "Symbol mapping deleted",
+        description: "The symbol mapping has been removed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete symbol mapping. Please try again.",
         variant: "destructive",
       });
     },
@@ -270,6 +329,95 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </FormItem>
                   )}
                 />
+              </div>
+
+              {/* Symbol Mappings */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold">Symbol Mappings</h3>
+                <p className="text-xs text-muted-foreground">
+                  Map TradingView symbol names to your MT5 broker's symbol names. For example, map "BTCUSD" to "BTCUSDm".
+                </p>
+
+                {/* Add new mapping */}
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="text-xs font-medium mb-1.5 block">TradingView Symbol</label>
+                      <Input
+                        placeholder="e.g., BTCUSD"
+                        value={newTvSymbol}
+                        onChange={(e) => setNewTvSymbol(e.target.value)}
+                        data-testid="input-tradingview-symbol"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs font-medium mb-1.5 block">MT5 Symbol</label>
+                      <Input
+                        placeholder="e.g., BTCUSDm"
+                        value={newMt5Symbol}
+                        onChange={(e) => setNewMt5Symbol(e.target.value)}
+                        data-testid="input-mt5-symbol"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => addMappingMutation.mutate()}
+                      disabled={!newTvSymbol.trim() || !newMt5Symbol.trim() || addMappingMutation.isPending}
+                      data-testid="button-add-mapping"
+                    >
+                      {addMappingMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Existing mappings */}
+                {symbolMappings.length > 0 ? (
+                  <div className="rounded-lg border border-border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>TradingView Symbol</TableHead>
+                          <TableHead>MT5 Symbol</TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {symbolMappings.map((mapping) => (
+                          <TableRow key={mapping.id} data-testid={`mapping-row-${mapping.id}`}>
+                            <TableCell className="font-medium" data-testid={`text-tv-symbol-${mapping.id}`}>
+                              {mapping.tradingViewSymbol}
+                            </TableCell>
+                            <TableCell data-testid={`text-mt5-symbol-${mapping.id}`}>
+                              {mapping.mt5Symbol}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteMappingMutation.mutate(mapping.id)}
+                                disabled={deleteMappingMutation.isPending}
+                                data-testid={`button-delete-mapping-${mapping.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/50 p-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No symbol mappings configured. Add one above to get started.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
