@@ -1,0 +1,115 @@
+1) Automatic trend identification (what your code/chart should check)
+
+Uptrend = price making higher highs and higher lows.
+Quick automated checks you can use:
+
+Require the last two pivot lows to be higher than the two before them, OR
+
+Require price > a medium MA (e.g. 50 EMA) and that MA is sloping up.
+
+Downtrend = opposite (lower highs & lower lows, or price < MA and MA sloping down).
+
+Use the pivot test + MA together for stronger filtering: both true → trend confirmed.
+
+2) What to look for on the screenshots (left image = ideal, right = caution)
+
+Left image (green trade box):
+
+You can see a small internal low formed, price moved up, then later dipped below that small low (liquidation).
+
+After that liquidation, price moved up to a swing high.
+
+Fibonacci was drawn from the liquidation low → swing high.
+
+Price retraced into the 0.705–0.69 zone (the red/green band).
+
+A bullish candle touched the zone and closed above the zone low → entry accepted.
+
+Price then moved back up to the swing high → TP hit (green area = trade distance).
+
+Right image (be careful):
+
+Price touched the fib zone but the price action afterwards produced a strong bearish move.
+
+If the candle that touched the zone had closed below the zone low (or closed bearish without strength), that would be no-trade or a losing trade.
+
+This illustrates the rule: wick touch allowed, but close must be bullish (for buys) and not below zone low.
+
+3) Entry logic — step by step (exact, human form)
+
+Assume Uptrend (mirror for downtrend):
+
+Detect a small pivot low (an internal low inside the uptrend).
+
+Wait until price takes out (liquidates) that small pivot low (price makes a new low below it).
+
+After liquidation, wait for the next swing high to form (this is the top of the immediate rally after the liquidation).
+
+You do NOT require that this high breaks the previous larger high. That doesn’t matter.
+
+Draw Fibonacci from the liquidation low (bottom) up to the swing high (top).
+
+Define the buy zone between 70.5% (0.705) and 69% (0.69) retracement of that range.
+
+Show the zone as a filled rectangle on the chart.
+
+Wait for price to tap the zone.
+
+A wick can enter the zone (wick touches allowed).
+
+But the candle that touches the zone must close bullish and must not close below the lower edge (0.69).
+
+Enter long at the close of that bullish candle.
+
+Stop Loss (SL): put SL just below the low of the entry candle (optionally minus a tick buffer).
+
+Take Profit (TP): target the swing high used for the Fibonacci.
+
+If any structural rule breaks (a new lower low for buys), cancel the setup and reset.
+
+4) Quick checklist to mark a valid BUY on the chart
+
+ Trend = up (MA or pivot lows rising)
+
+ Small pivot low identified
+
+ That small low was liquidated (price went below it)
+
+ After liquidation price made a swing high
+
+ Fib drawn from liquidation low → swing high
+
+ Price taps 0.705–0.69 zone
+
+ Candle that tapped zone closed bullish and close ≥ zoneLow
+
+ No new lower low has formed since setup
+If all true → enter long.
+
+5) Extra rules / best practices (reduce false signals)
+
+Don’t trade if the candle that tapped the zone is tiny or indecisive — prefer a clear bullish body (optionally set a minimum body %).
+
+Optionally require higher volume (or larger range) on the bullish candle for stronger confirmation.
+
+Prefer setups where the trend filter is confirmed by higher timeframe (e.g., 1-hour shows uptrend while trading 15m).
+
+Use a small tick offset for SL to avoid being stopped by micro-noise.
+
+6) Example mapping to your visuals (language you can paste into code comments)
+
+liquidationLow := the bar.low when price first traded below the earlier pivot low.
+
+swingHigh := the pivot high formed after the liquidation low.
+
+fibHigh := 0.705 level = liquidationLow + (swingHigh - liquidationLow) * 0.705.
+
+fibLow := 0.69 level = liquidationLow + (swingHigh - liquidationLow) * 0.69.
+
+zoneTouched := current bar intersects [fibLow, fibHigh] (wick allowed).
+
+entryCondition := zoneTouched AND bar.close >= fibLow AND bar.close > bar.open AND trend_is_up.
+
+SL := bar.low - min_tick_buffer.
+
+TP := swingHigh.
