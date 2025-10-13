@@ -110,7 +110,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
       toast({
         title: "Settings saved",
-        description: "Your MT5 HTTP polling configuration has been updated successfully.",
+        description: "Your MT5 configuration has been updated successfully.",
       });
       onOpenChange(false);
     },
@@ -188,7 +188,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Configure your MetaTrader 5 HTTP polling connection and trading parameters
+            Configure your MetaTrader 5 connection and trading parameters
           </DialogDescription>
         </DialogHeader>
 
@@ -228,15 +228,15 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
               </div>
 
-              {/* MT5 HTTP Connection */}
+              {/* MT5 Connection */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">MT5 HTTP Polling Connection</h3>
+                  <h3 className="text-sm font-semibold">MT5 Connection</h3>
                   <a 
                     href="#" 
                     onClick={(e) => {
                       e.preventDefault();
-                      window.open('/mt5-files/INSTALLATION_GUIDE.md', '_blank');
+                      window.open('/mt5-files/INSTALLATION_GUIDE_WEBSOCKET.md', '_blank');
                     }}
                     className="text-xs text-primary hover:underline flex items-center gap-1"
                   >
@@ -245,7 +245,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   </a>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connect MT5 using built-in WebRequest (no external libraries needed). MT5 polls this server every second.
+                  Connect MT5 using WebSocket for real-time, low-latency trade execution.
                 </p>
                 
                 <FormField
@@ -272,8 +272,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
                 <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3">
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    📋 <strong>Setup Required:</strong> Install the TradingViewHTTP_EA.mq5 Expert Advisor in your MT5 terminal. 
-                    Check the <code className="bg-background/50 px-1 rounded">mt5-files/INSTALLATION_GUIDE.md</code> for complete instructions.
+                    📋 <strong>Setup Required:</strong> Install the TradingViewWebSocket_EA.mq5 Expert Advisor in your MT5 terminal. 
+                    Check the <code className="bg-background/50 px-1 rounded">mt5-files/INSTALLATION_GUIDE_WEBSOCKET.md</code> for complete instructions.
                   </p>
                 </div>
               </div>

@@ -173,7 +173,7 @@ void ConnectWebSocket()
       return;
    }
    
-   // Set socket timeout
+   // Set socket timeout (all parameters must be uint)
    SocketTimeouts(wsHandle, 5000, 5000, 5000);
    
    // Connect to server
@@ -203,16 +203,17 @@ void ConnectWebSocket()
    
    // Send handshake (use TLS send if SSL)
    int sent;
+   uchar handshakeBytes[];
+   StringToCharArray(handshake, handshakeBytes, 0, WHOLE_ARRAY, CP_UTF8);
+   ArrayResize(handshakeBytes, ArraySize(handshakeBytes) - 1);  // Remove null terminator
+   
    if(useSSL)
    {
-      uchar handshakeBytes[];
-      StringToCharArray(handshake, handshakeBytes, 0, WHOLE_ARRAY, CP_UTF8);
-      ArrayResize(handshakeBytes, ArraySize(handshakeBytes) - 1);  // Remove null terminator
       sent = SocketTlsSend(wsHandle, handshakeBytes, ArraySize(handshakeBytes));
    }
    else
    {
-      sent = SocketSend(wsHandle, handshake, StringLen(handshake));
+      sent = SocketSend(wsHandle, handshakeBytes, ArraySize(handshakeBytes));
    }
    
    if(sent < 0)
@@ -237,11 +238,11 @@ void ConnectWebSocket()
       }
       else
       {
-         int readable = SocketIsReadable(wsHandle);
+         uint readable = SocketIsReadable(wsHandle);
          if(readable > 0)
          {
-            ArrayResize(buffer, readable);
-            received = SocketRead(wsHandle, buffer, readable, 100);
+            ArrayResize(buffer, (int)readable);
+            received = SocketRead(wsHandle, buffer, (int)readable, 100);
          }
          else
          {
@@ -291,12 +292,12 @@ void CheckForMessages()
    }
    else
    {
-      int readable = SocketIsReadable(wsHandle);
+      uint readable = SocketIsReadable(wsHandle);
       if(readable <= 0)
          return;
       
-      ArrayResize(buffer, readable);
-      bytes = SocketRead(wsHandle, buffer, readable, 100);
+      ArrayResize(buffer, (int)readable);
+      bytes = SocketRead(wsHandle, buffer, (int)readable, 100);
    }
    
    if(bytes <= 0)
@@ -355,7 +356,7 @@ string DecodeWebSocketFrame(uchar &buffer[], int length)
    }
    
    // Extract payload
-   if(offset + payloadLength > length)
+   if(offset + (int)payloadLength > length)
       return "";
    
    uchar payload[];
