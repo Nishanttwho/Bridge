@@ -231,8 +231,7 @@ if sellSignal and enableAlerts
 // INFORMATION TABLE
 // ===========================
 
-var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.gray, 90), 
-                                border_width=1, border_color=color.gray)
+var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.gray, 90), border_width=1, border_color=color.gray)
 
 if barstate.islast
     table.cell(infoTable, 0, 0, "OTE Indicator", text_color=color.white, text_size=size.normal)
