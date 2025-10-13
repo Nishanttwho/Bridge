@@ -59,9 +59,9 @@ if not na(buySetup_LiquidationLow) and na(buySetup_SwingHigh) and not na(pivotH)
 buyFibZoneHigh = na
 buyFibZoneLow = na
 if buySetup_Active and not na(buySetup_LiquidationLow) and not na(buySetup_SwingHigh)
-    range = buySetup_SwingHigh - buySetup_LiquidationLow
-    buyFibZoneHigh := buySetup_LiquidationLow + (range * fibHigh)
-    buyFibZoneLow := buySetup_LiquidationLow + (range * fibLow)
+    priceRange = buySetup_SwingHigh - buySetup_LiquidationLow
+    buyFibZoneHigh := buySetup_LiquidationLow + (priceRange * fibHigh)
+    buyFibZoneLow := buySetup_LiquidationLow + (priceRange * fibLow)
 
 // BUY Entry logic
 buyZoneTapped = buySetup_Active and not na(buyFibZoneLow) and not na(buyFibZoneHigh) and 
@@ -110,9 +110,9 @@ if not na(sellSetup_LiquidationHigh) and na(sellSetup_SwingLow) and not na(pivot
 sellFibZoneHigh = na
 sellFibZoneLow = na
 if sellSetup_Active and not na(sellSetup_LiquidationHigh) and not na(sellSetup_SwingLow)
-    range = sellSetup_LiquidationHigh - sellSetup_SwingLow
-    sellFibZoneHigh := sellSetup_LiquidationHigh - (range * fibLow)
-    sellFibZoneLow := sellSetup_LiquidationHigh - (range * fibHigh)
+    priceRange = sellSetup_LiquidationHigh - sellSetup_SwingLow
+    sellFibZoneHigh := sellSetup_LiquidationHigh - (priceRange * fibLow)
+    sellFibZoneLow := sellSetup_LiquidationHigh - (priceRange * fibHigh)
 
 // SELL Entry logic
 sellZoneTapped = sellSetup_Active and not na(sellFibZoneLow) and not na(sellFibZoneHigh) and 
