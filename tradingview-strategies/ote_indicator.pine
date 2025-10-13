@@ -141,17 +141,11 @@ if not na(dealingRangeLow) and not na(dealingRangeHigh) and dealingRangeLowBar <
             line.delete(dealingRangeLowLine)
             
         // Create new lines that extend to the right
-        oteLevelLine := line.new(dealingRangeLowBar, oteLevel, bar_index + 20, oteLevel, 
-                                 color=color.new(color.yellow, 0), width=levelThickness, 
-                                 style=line.style_solid, extend=extend.right)
+        oteLevelLine := line.new(dealingRangeLowBar, oteLevel, bar_index + 20, oteLevel, color=color.new(color.yellow, 0), width=levelThickness, style=line.style_solid, extend=extend.right)
         
         if showDealingRange
-            dealingRangeHighLine := line.new(dealingRangeHighBar, dealingRangeHigh, bar_index + 20, dealingRangeHigh,
-                                             color=color.new(color.green, 50), width=1, 
-                                             style=line.style_dashed, extend=extend.right)
-            dealingRangeLowLine := line.new(dealingRangeLowBar, dealingRangeLow, bar_index + 20, dealingRangeLow,
-                                            color=color.new(color.green, 50), width=1, 
-                                            style=line.style_dashed, extend=extend.right)
+            dealingRangeHighLine := line.new(dealingRangeHighBar, dealingRangeHigh, bar_index + 20, dealingRangeHigh, color=color.new(color.green, 50), width=1, style=line.style_dashed, extend=extend.right)
+            dealingRangeLowLine := line.new(dealingRangeLowBar, dealingRangeLow, bar_index + 20, dealingRangeLow, color=color.new(color.green, 50), width=1, style=line.style_dashed, extend=extend.right)
 
 // For DOWNTREND: Calculate 0.705 from swing high to swing low
 if not na(dealingRangeLow) and not na(dealingRangeHigh) and dealingRangeHighBar < dealingRangeLowBar and downtrend
@@ -168,17 +162,11 @@ if not na(dealingRangeLow) and not na(dealingRangeHigh) and dealingRangeHighBar 
             line.delete(dealingRangeLowLine)
             
         // Create new lines that extend to the right
-        oteLevelLine := line.new(dealingRangeHighBar, oteLevel, bar_index + 20, oteLevel, 
-                                 color=color.new(color.yellow, 0), width=levelThickness, 
-                                 style=line.style_solid, extend=extend.right)
+        oteLevelLine := line.new(dealingRangeHighBar, oteLevel, bar_index + 20, oteLevel, color=color.new(color.yellow, 0), width=levelThickness, style=line.style_solid, extend=extend.right)
         
         if showDealingRange
-            dealingRangeHighLine := line.new(dealingRangeHighBar, dealingRangeHigh, bar_index + 20, dealingRangeHigh,
-                                             color=color.new(color.red, 50), width=1, 
-                                             style=line.style_dashed, extend=extend.right)
-            dealingRangeLowLine := line.new(dealingRangeLowBar, dealingRangeLow, bar_index + 20, dealingRangeLow,
-                                            color=color.new(color.red, 50), width=1, 
-                                            style=line.style_dashed, extend=extend.right)
+            dealingRangeHighLine := line.new(dealingRangeHighBar, dealingRangeHigh, bar_index + 20, dealingRangeHigh, color=color.new(color.red, 50), width=1, style=line.style_dashed, extend=extend.right)
+            dealingRangeLowLine := line.new(dealingRangeLowBar, dealingRangeLow, bar_index + 20, dealingRangeLow, color=color.new(color.red, 50), width=1, style=line.style_dashed, extend=extend.right)
 
 // ===========================
 // ENTRY SIGNAL LOGIC (REVISED)
