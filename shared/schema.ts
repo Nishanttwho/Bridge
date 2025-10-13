@@ -160,9 +160,37 @@ export type DashboardStats = {
   isConnected: boolean;
 };
 
+// MT5 Account Info type (from actual MT5)
+export type MT5AccountInfo = {
+  balance: number;
+  equity: number;
+  margin: number;
+  freeMargin: number;
+  marginLevel: number;
+  profit: number;
+};
+
+// MT5 Position type (actual open positions from MT5)
+export type MT5Position = {
+  ticket: string;
+  symbol: string;
+  type: 'BUY' | 'SELL';
+  volume: number;
+  openPrice: number;
+  currentPrice: number;
+  stopLoss: number;
+  takeProfit: number;
+  profit: number;
+  swap: number;
+  commission: number;
+  openTime: string;
+};
+
 // WebSocket message types
 export type WSMessage = 
   | { type: 'signal'; data: Signal }
   | { type: 'trade'; data: Trade }
   | { type: 'stats'; data: DashboardStats }
-  | { type: 'connection'; data: { status: 'connected' | 'disconnected' } };
+  | { type: 'connection'; data: { status: 'connected' | 'disconnected' } }
+  | { type: 'mt5_account'; data: MT5AccountInfo }
+  | { type: 'mt5_positions'; data: MT5Position[] };
