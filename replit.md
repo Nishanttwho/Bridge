@@ -71,6 +71,20 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **ICT OTE INDICATOR CREATED** (January 2025)
+  - **Created comprehensive OTE Pine Script indicator** - Implements ICT's Optimal Trade Entry concept with 62-79% Fibonacci retracement zones
+  - **Automatic trend detection** - Uses EMA to identify uptrends/downtrends
+  - **Swing point identification** - Automatically detects swing lows and highs for zone calculation
+  - **Entry confirmation logic** - Validates candle touches zone and closes in trend direction
+  - **Visual zone display** - Shows OTE zones with color-coded boxes (green for buy, red for sell)
+  - **Zone cleanup** - Automatically removes old zones when setups become invalid
+  - **Info table** - Real-time display of trend, zone %, swing levels, and alert status
+  - **Webhook integration** - Sends symbol, type, indicator, entry, stopLoss, takeProfit to backend
+  - **Position sizing handled server-side** - Backend calculates lot size based on risk settings
+  - **Created OTE_STRATEGY_GUIDE.md** - Complete setup instructions, best practices, troubleshooting
+  - **Created tradingview-strategies/README.md** - Comprehensive guide to all available indicators
+  - **Updated TRADINGVIEW_WEBHOOK_GUIDE.md** - Added OTE section with webhook format and examples
+  - **Result: Professional ICT OTE indicator ready for live trading with full documentation**
 - ✅ **TARGET TREND INDICATOR INTEGRATION** (October 13, 2025)
   - **Added indicator support to schema** - Extended Signal model with indicatorType, entryPrice, stopLoss, takeProfit fields
   - **Fixed storage persistence** - MemStorage now correctly saves all indicator fields
