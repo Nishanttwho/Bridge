@@ -56,20 +56,20 @@ if not na(buySetup_LiquidationLow) and na(buySetup_SwingHigh) and not na(pivotH)
     buySetup_Active := true  // Setup is now active
 
 // Calculate BUY Fibonacci zone
-buyFibZoneHigh = na
-buyFibZoneLow = na
+float buyFibZoneHigh = na
+float buyFibZoneLow = na
 if buySetup_Active and not na(buySetup_LiquidationLow) and not na(buySetup_SwingHigh)
-    priceRange = buySetup_SwingHigh - buySetup_LiquidationLow
+    float priceRange = buySetup_SwingHigh - buySetup_LiquidationLow
     buyFibZoneHigh := buySetup_LiquidationLow + (priceRange * fibHigh)
     buyFibZoneLow := buySetup_LiquidationLow + (priceRange * fibLow)
 
 // BUY Entry logic
-buyZoneTapped = buySetup_Active and not na(buyFibZoneLow) and not na(buyFibZoneHigh) and 
+bool buyZoneTapped = buySetup_Active and not na(buyFibZoneLow) and not na(buyFibZoneHigh) and 
                  low <= buyFibZoneHigh and low >= buyFibZoneLow
 
-buyValidClose = close > open and close >= buyFibZoneLow
+bool buyValidClose = close > open and close >= buyFibZoneLow
 
-buyEntry = buyZoneTapped and buyValidClose and strategy.position_size == 0
+bool buyEntry = buyZoneTapped and buyValidClose and strategy.position_size == 0
 
 if buyEntry
     strategy.entry("Long", strategy.long)
@@ -107,20 +107,20 @@ if not na(sellSetup_LiquidationHigh) and na(sellSetup_SwingLow) and not na(pivot
     sellSetup_Active := true  // Setup is now active
 
 // Calculate SELL Fibonacci zone
-sellFibZoneHigh = na
-sellFibZoneLow = na
+float sellFibZoneHigh = na
+float sellFibZoneLow = na
 if sellSetup_Active and not na(sellSetup_LiquidationHigh) and not na(sellSetup_SwingLow)
-    priceRange = sellSetup_LiquidationHigh - sellSetup_SwingLow
+    float priceRange = sellSetup_LiquidationHigh - sellSetup_SwingLow
     sellFibZoneHigh := sellSetup_LiquidationHigh - (priceRange * fibLow)
     sellFibZoneLow := sellSetup_LiquidationHigh - (priceRange * fibHigh)
 
 // SELL Entry logic
-sellZoneTapped = sellSetup_Active and not na(sellFibZoneLow) and not na(sellFibZoneHigh) and 
+bool sellZoneTapped = sellSetup_Active and not na(sellFibZoneLow) and not na(sellFibZoneHigh) and 
                   high >= sellFibZoneLow and high <= sellFibZoneHigh
 
-sellValidClose = close < open and close <= sellFibZoneHigh
+bool sellValidClose = close < open and close <= sellFibZoneHigh
 
-sellEntry = sellZoneTapped and sellValidClose and strategy.position_size == 0
+bool sellEntry = sellZoneTapped and sellValidClose and strategy.position_size == 0
 
 if sellEntry
     strategy.entry("Short", strategy.short)
