@@ -1,0 +1,224 @@
+//@version=5
+indicator("ICT OTE Advanced", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+
+// ==================== INPUTS ====================
+pivotLength = input.int(10, "Pivot Length", minval=5, maxval=30, group="Core Settings")
+detectFVG = input.bool(true, "Detect Fair Value Gaps", group="FVG")
+fvgExtend = input.int(20, "FVG Extension Bars", minval=5, maxval=100, group="FVG")
+detectOB = input.bool(true, "Detect Order Blocks", group="Order Blocks")
+obExtend = input.int(20, "OB Extension Bars", minval=5, maxval=100, group="Order Blocks")
+detectMSS = input.bool(true, "Detect Market Structure Shift", group="Structure")
+showOTEZone = input.bool(true, "Show OTE Zone", group="OTE")
+showEquilibrium = input.bool(true, "Show 50% Equilibrium", group="OTE")
+showPreciseOTE = input.bool(true, "Show 0.705 OTE", group="OTE")
+showTargets = input.bool(true, "Show Targets", group="OTE")
+trendMA = input.int(50, "Trend Filter EMA", minval=20, maxval=200, group="Trend")
+useTrendFilter = input.bool(true, "Use Trend Filter", group="Trend")
+bullColor = input.color(#00ff88, "Bullish Color", group="Colors")
+bearColor = input.color(#ff4444, "Bearish Color", group="Colors")
+
+// ==================== FIBONACCI LEVELS ====================
+fib_50 = 0.5
+fib_62 = 0.62
+fib_705 = 0.705
+fib_79 = 0.79
+
+// ==================== TREND FILTER ====================
+ema = ta.ema(close, trendMA)
+bullishTrend = close > ema and ema > ema[5]
+bearishTrend = close < ema and ema < ema[5]
+
+// ==================== PIVOT DETECTION ====================
+pivotHigh = ta.pivothigh(high, pivotLength, pivotLength)
+pivotLow = ta.pivotlow(low, pivotLength, pivotLength)
+
+// ==================== FAIR VALUE GAP ====================
+bullFVG = detectFVG and (low > high[2])
+bullFVGTop = bullFVG ? low : na
+bullFVGBottom = bullFVG ? high[2] : na
+
+bearFVG = detectFVG and (high < low[2])
+bearFVGTop = bearFVG ? low[2] : na
+bearFVGBottom = bearFVG ? high : na
+
+if bullFVG
+    box.new(bar_index - 2, bullFVGBottom, bar_index + fvgExtend, bullFVGTop, border_color=color.new(bullColor, 70), bgcolor=color.new(bullColor, 90), border_width=1, text="FVG", text_color=color.new(bullColor, 30), text_size=size.tiny)
+
+if bearFVG
+    box.new(bar_index - 2, bearFVGBottom, bar_index + fvgExtend, bearFVGTop, border_color=color.new(bearColor, 70), bgcolor=color.new(bearColor, 90), border_width=1, text="FVG", text_color=color.new(bearColor, 30), text_size=size.tiny)
+
+// ==================== ORDER BLOCKS ====================
+bullDisplacement = (close > open) and (close - open) > (ta.atr(14) * 1.5)
+
+if detectOB and bullDisplacement and close[1] < open[1]
+    box.new(bar_index - 1, close[1], bar_index + obExtend, open[1], border_color=color.new(bullColor, 60), bgcolor=color.new(bullColor, 85), border_width=2, text="OB", text_color=color.new(bullColor, 20), text_size=size.small)
+
+bearDisplacement = (close < open) and (open - close) > (ta.atr(14) * 1.5)
+
+if detectOB and bearDisplacement and close[1] > open[1]
+    box.new(bar_index - 1, open[1], bar_index + obExtend, close[1], border_color=color.new(bearColor, 60), bgcolor=color.new(bearColor, 85), border_width=2, text="OB", text_color=color.new(bearColor, 20), text_size=size.small)
+
+// ==================== MARKET STRUCTURE SHIFT ====================
+var float lastHigh = na
+var float lastLow = na
+
+if not na(pivotHigh)
+    lastHigh := pivotHigh[pivotLength]
+
+if not na(pivotLow)
+    lastLow := pivotLow[pivotLength]
+
+bullMSS = detectMSS and not na(lastHigh) and close > lastHigh and close[1] <= lastHigh
+bearMSS = detectMSS and not na(lastLow) and close < lastLow and close[1] >= lastLow
+
+if bullMSS
+    label.new(bar_index, low, "MSS ⬆", color=color.new(bullColor, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+if bearMSS
+    label.new(bar_index, high, "MSS ⬇", color=color.new(bearColor, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// ==================== BULLISH OTE ====================
+var float bull_RangeLow = na
+var float bull_RangeHigh = na
+var bool bull_SetupActive = false
+
+if not na(pivotLow) and (na(bull_RangeLow) or pivotLow[pivotLength] < bull_RangeLow)
+    bull_RangeLow := pivotLow[pivotLength]
+
+if not na(bull_RangeLow) and not na(pivotHigh) and pivotHigh[pivotLength] > bull_RangeLow
+    if na(bull_RangeHigh) or pivotHigh[pivotLength] > bull_RangeHigh
+        bull_RangeHigh := pivotHigh[pivotLength]
+        bull_SetupActive := true
+
+float bull_Range = bull_RangeHigh - bull_RangeLow
+float bull_Fib50 = bull_SetupActive ? bull_RangeLow + (bull_Range * fib_50) : na
+float bull_Fib62 = bull_SetupActive ? bull_RangeLow + (bull_Range * fib_62) : na
+float bull_Fib705 = bull_SetupActive ? bull_RangeLow + (bull_Range * fib_705) : na
+float bull_Fib79 = bull_SetupActive ? bull_RangeLow + (bull_Range * fib_79) : na
+float bull_Target1 = bull_SetupActive ? bull_RangeHigh + (bull_Range * 0.5) : na
+float bull_Target2 = bull_SetupActive ? bull_RangeHigh + bull_Range : na
+
+bool bull_InOTEZone = bull_SetupActive and low <= bull_Fib79 and low >= bull_Fib62
+bool bull_InDiscount = close < bull_Fib50
+bool bull_TrendOK = useTrendFilter ? bullishTrend : true
+bool bull_EntrySignal = bull_InOTEZone and bull_InDiscount and bull_TrendOK
+
+if bull_SetupActive and not na(pivotLow) and pivotLow[pivotLength] < bull_RangeLow - (bull_Range * 0.1)
+    bull_SetupActive := false
+    bull_RangeLow := na
+    bull_RangeHigh := na
+
+// ==================== BEARISH OTE ====================
+var float bear_RangeHigh = na
+var float bear_RangeLow = na
+var bool bear_SetupActive = false
+
+if not na(pivotHigh) and (na(bear_RangeHigh) or pivotHigh[pivotLength] > bear_RangeHigh)
+    bear_RangeHigh := pivotHigh[pivotLength]
+
+if not na(bear_RangeHigh) and not na(pivotLow) and pivotLow[pivotLength] < bear_RangeHigh
+    if na(bear_RangeLow) or pivotLow[pivotLength] < bear_RangeLow
+        bear_RangeLow := pivotLow[pivotLength]
+        bear_SetupActive := true
+
+float bear_Range = bear_RangeHigh - bear_RangeLow
+float bear_Fib50 = bear_SetupActive ? bear_RangeHigh - (bear_Range * fib_50) : na
+float bear_Fib62 = bear_SetupActive ? bear_RangeHigh - (bear_Range * fib_62) : na
+float bear_Fib705 = bear_SetupActive ? bear_RangeHigh - (bear_Range * fib_705) : na
+float bear_Fib79 = bear_SetupActive ? bear_RangeHigh - (bear_Range * fib_79) : na
+float bear_Target1 = bear_SetupActive ? bear_RangeLow - (bear_Range * 0.5) : na
+float bear_Target2 = bear_SetupActive ? bear_RangeLow - bear_Range : na
+
+bool bear_InOTEZone = bear_SetupActive and high >= bear_Fib62 and high <= bear_Fib79
+bool bear_InPremium = close > bear_Fib50
+bool bear_TrendOK = useTrendFilter ? bearishTrend : true
+bool bear_EntrySignal = bear_InOTEZone and bear_InPremium and bear_TrendOK
+
+if bear_SetupActive and not na(pivotHigh) and pivotHigh[pivotLength] > bear_RangeHigh + (bear_Range * 0.1)
+    bear_SetupActive := false
+    bear_RangeHigh := na
+    bear_RangeLow := na
+
+// ==================== VISUALS ====================
+plot(ema, "Trend EMA", color.new(color.yellow, 60), 2)
+
+if showOTEZone and bull_SetupActive
+    p1 = plot(bull_Fib79, "OTE 79%", color.new(bullColor, 0), 2)
+    p2 = plot(bull_Fib62, "OTE 62%", color.new(bullColor, 0), 2)
+    fill(p1, p2, color.new(bullColor, 85), title="Bull OTE Zone")
+
+if showEquilibrium
+    plot(bull_Fib50, "50% EQ", color.new(color.gray, 50), 1, plot.style_circles)
+
+if showPreciseOTE
+    plot(bull_Fib705, "70.5% OTE", color.new(bullColor, 30), 2, plot.style_cross)
+
+if showTargets
+    plot(bull_Target1, "Target 1", color.new(color.aqua, 50), 1, plot.style_circles)
+    plot(bull_Target2, "Target 2", color.new(color.blue, 50), 1, plot.style_circles)
+
+if showOTEZone and bear_SetupActive
+    p3 = plot(bear_Fib62, "OTE 62%", color.new(bearColor, 0), 2)
+    p4 = plot(bear_Fib79, "OTE 79%", color.new(bearColor, 0), 2)
+    fill(p3, p4, color.new(bearColor, 85), title="Bear OTE Zone")
+
+if showEquilibrium
+    plot(bear_Fib50, "50% EQ", color.new(color.gray, 50), 1, plot.style_circles)
+
+if showPreciseOTE
+    plot(bear_Fib705, "70.5% OTE", color.new(bearColor, 30), 2, plot.style_cross)
+
+if showTargets
+    plot(bear_Target1, "Target 1", color.new(color.fuchsia, 50), 1, plot.style_circles)
+    plot(bear_Target2, "Target 2", color.new(color.purple, 50), 1, plot.style_circles)
+
+bgcolor(bull_SetupActive and bull_InDiscount ? color.new(bullColor, 97) : na)
+bgcolor(bear_SetupActive and bear_InPremium ? color.new(bearColor, 97) : na)
+
+if bull_EntrySignal
+    label.new(bar_index, low, "LONG OTE", color=color.new(bullColor, 0), textcolor=color.white, style=label.style_label_up, size=size.normal)
+    alert("LONG OTE Entry at " + str.tostring(close), alert.freq_once_per_bar)
+
+if bear_EntrySignal
+    label.new(bar_index, high, "SHORT OTE", color=color.new(bearColor, 0), textcolor=color.white, style=label.style_label_down, size=size.normal)
+    alert("SHORT OTE Entry at " + str.tostring(close), alert.freq_once_per_bar)
+
+// ==================== STATUS TABLE ====================
+var table t = table.new(position.top_right, 2, 6, border_width=1)
+
+if barstate.islast
+    table.cell(t, 0, 0, "ICT OTE", bgcolor=color.new(color.blue, 60), text_color=color.white)
+    table.cell(t, 1, 0, "STATUS", bgcolor=color.new(color.blue, 60), text_color=color.white)
+    
+    table.cell(t, 0, 1, "Trend", text_color=color.white)
+    trendText = bullishTrend ? "BULL ⬆" : bearishTrend ? "BEAR ⬇" : "NEUTRAL"
+    trendBg = bullishTrend ? color.new(bullColor, 70) : bearishTrend ? color.new(bearColor, 70) : color.new(color.gray, 80)
+    table.cell(t, 1, 1, trendText, bgcolor=trendBg, text_color=color.white)
+    
+    table.cell(t, 0, 2, "LONG OTE", text_color=color.white)
+    longStatus = bull_SetupActive ? (bull_InOTEZone ? "IN ZONE" : "WAITING") : "No Setup"
+    longBg = bull_SetupActive ? (bull_InOTEZone ? color.new(bullColor, 60) : color.new(bullColor, 80)) : color.new(color.gray, 85)
+    table.cell(t, 1, 2, longStatus, bgcolor=longBg, text_color=color.white)
+    
+    table.cell(t, 0, 3, "SHORT OTE", text_color=color.white)
+    shortStatus = bear_SetupActive ? (bear_InOTEZone ? "IN ZONE" : "WAITING") : "No Setup"
+    shortBg = bear_SetupActive ? (bear_InOTEZone ? color.new(bearColor, 60) : color.new(bearColor, 80)) : color.new(color.gray, 85)
+    table.cell(t, 1, 3, shortStatus, bgcolor=shortBg, text_color=color.white)
+    
+    table.cell(t, 0, 4, "FVG", text_color=color.white)
+    fvgStatus = bullFVG ? "BULL" : bearFVG ? "BEAR" : "None"
+    fvgBg = bullFVG ? color.new(bullColor, 70) : bearFVG ? color.new(bearColor, 70) : color.new(color.gray, 85)
+    table.cell(t, 1, 4, fvgStatus, bgcolor=fvgBg, text_color=color.white)
+    
+    table.cell(t, 0, 5, "MSS", text_color=color.white)
+    mssStatus = bullMSS ? "BULL" : bearMSS ? "BEAR" : "None"
+    mssBg = bullMSS ? color.new(bullColor, 70) : bearMSS ? color.new(bearColor, 70) : color.new(color.gray, 85)
+    table.cell(t, 1, 5, mssStatus, bgcolor=mssBg, text_color=color.white)
+
+// ==================== ALERTS ====================
+alertcondition(bull_EntrySignal, "Bullish OTE", "LONG OTE Entry - Price in 0.62-0.79 zone")
+alertcondition(bear_EntrySignal, "Bearish OTE", "SHORT OTE Entry - Price in 0.62-0.79 zone")
+alertcondition(bullFVG, "Bullish FVG", "Bullish Fair Value Gap")
+alertcondition(bearFVG, "Bearish FVG", "Bearish Fair Value Gap")
+alertcondition(bullMSS, "Bullish MSS", "Bullish Market Structure Shift")
+alertcondition(bearMSS, "Bearish MSS", "Bearish Market Structure Shift")
