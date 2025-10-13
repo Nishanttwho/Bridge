@@ -1,0 +1,99 @@
+//@version=5
+strategy("Fibonacci 0.705 Retracement Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+// ============================================================================
+// STRATEGY LOGIC:
+// 1. In uptrend: Place Fibonacci from swing low to swing high
+// 2. Wait for price to tap 0.705 Fibonacci level
+// 3. Entry condition: Candle that taps 0.705 must:
+//    - NOT have body close below 0.705 (body stays above)
+//    - Close BULLISH (green candle) during retracement
+// 4. Stop Loss: Below the candle that tapped 0.705
+// 5. Take Profit: The previous swing high
+// ============================================================================
+
+// Input Parameters
+lookbackPeriod = input.int(50, "Swing Lookback Period", minval=20, maxval=200)
+fibLevel = input.float(0.705, "Fibonacci Level", minval=0.5, maxval=0.9, step=0.005)
+webhookUrl = input.string("https://your-replit-app.replit.dev/api/webhook", "Webhook URL")
+apiSecret = input.string("your-secret-key", "API Secret")
+
+// Detect Swing High and Low
+var float swingHigh = na
+var float swingLow = na
+var int swingHighBar = na
+var int swingLowBar = na
+
+// Current high/low detection
+highestHigh = ta.highest(high, lookbackPeriod)
+lowestLow = ta.lowest(low, lookbackPeriod)
+
+// Update swing points when new extremes are found
+if high >= highestHigh
+    swingHigh := high
+    swingHighBar := bar_index
+
+if low <= lowestLow
+    swingLow := low
+    swingLowBar := bar_index
+
+// Determine trend (uptrend if low was formed before high)
+isUptrend = not na(swingHigh) and not na(swingLow) and swingLowBar < swingHighBar
+
+// Calculate Fibonacci 0.705 level (from low to high in uptrend)
+fib705Level = na(swingLow) or na(swingHigh) ? na : swingLow + (swingHigh - swingLow) * fibLevel
+
+// Entry Conditions
+var bool waitingForRetracement = false
+var float entryLevel = na
+var float slLevel = na
+var float tpLevel = na
+
+// Check if price tapped the 0.705 level
+priceTapped705 = not na(fib705Level) and (low <= fib705Level and high >= fib705Level)
+
+// Check if candle closed bullish (close > open)
+isBullishClose = close > open
+
+// Check if candle body stayed above 0.705 level
+bodyAbove705 = not na(fib705Level) and close > fib705Level
+
+// LONG Entry Signal
+longCondition = isUptrend and priceTapped705 and isBullishClose and bodyAbove705 and strategy.position_size == 0
+
+// Execute Long Trade
+if longCondition
+    entryLevel := close
+    slLevel := low  // SL below the candle that tapped 0.705
+    tpLevel := swingHigh  // TP at previous high
+    
+    // Calculate values for webhook
+    slPips = math.abs(entryLevel - slLevel)
+    tpPips = math.abs(tpLevel - entryLevel)
+    
+    // Entry the trade
+    strategy.entry("Fib Long", strategy.long)
+    strategy.exit("Exit Long", "Fib Long", stop=slLevel, limit=tpLevel)
+    
+    // Send webhook to MT5
+    alert('{"symbol":"' + syminfo.ticker + '","type":"BUY","indicator":"fibonacci_705","entry":"' + str.tostring(entryLevel) + '","stopLoss":"' + str.tostring(slLevel) + '","takeProfit":"' + str.tostring(tpLevel) + '"}', alert.freq_once_per_bar)
+
+// Visual Elements
+plot(swingHigh, "Swing High", color=color.green, linewidth=2, style=plot.style_circles)
+plot(swingLow, "Swing Low", color=color.red, linewidth=2, style=plot.style_circles)
+plot(fib705Level, "Fib 0.705", color=color.blue, linewidth=2, style=plot.style_line)
+
+// Draw Fibonacci levels
+var line fibLine = na
+if isUptrend and not na(swingLow) and not na(swingHigh)
+    if not na(fibLine)
+        line.delete(fibLine)
+    fibLine := line.new(swingLowBar, swingLow, bar_index, fib705Level, color=color.blue, width=1)
+
+// Labels for entry
+if longCondition
+    label.new(bar_index, low, "LONG\nEntry: " + str.tostring(entryLevel, "#.##") + "\nSL: " + str.tostring(slLevel, "#.##") + "\nTP: " + str.tostring(tpLevel, "#.##"), 
+              color=color.green, textcolor=color.white, style=label.style_label_up, size=size.small)
+
+// Background color for uptrend
+bgcolor(isUptrend ? color.new(color.green, 95) : na, title="Uptrend Background")
