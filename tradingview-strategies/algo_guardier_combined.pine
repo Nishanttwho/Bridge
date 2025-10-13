@@ -138,9 +138,8 @@ upPlot = plot(algoTrend == 1 ? up : na, title='Up Trend', color=color.new(color.
 dnPlot = plot(algoTrend == 1 ? na : dn, title='Down Trend', style=plot.style_linebr, linewidth=3, color=color.new(color.red, 5))
 
 // Plot signals
-if show_signals
-    plotshape(buySignal ? up : na, title='Buy', text='BUY', location=location.absolute, style=shape.labelup, color=color.new(color.green, 0), textcolor=color.white, size=size.normal)
-    plotshape(sellSignal ? dn : na, title='Sell', text='SELL', location=location.absolute, style=shape.labeldown, color=color.new(color.red, 0), textcolor=color.white, size=size.normal)
+plotshape(show_signals and buySignal ? up : na, title='Buy', text='BUY', location=location.absolute, style=shape.labelup, color=color.new(color.green, 0), textcolor=color.white, size=size.normal)
+plotshape(show_signals and sellSignal ? dn : na, title='Sell', text='SELL', location=location.absolute, style=shape.labeldown, color=color.new(color.red, 0), textcolor=color.white, size=size.normal)
 
 // ============================================================================
 // 15M TREND TABLE DISPLAY
