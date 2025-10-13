@@ -18,7 +18,7 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **In-Memory Storage**: Fast signal and trade tracking
 
 ### Data Models
-- **Signal**: TradingView alert with type (BUY/SELL), symbol, price, status
+- **Signal**: TradingView alert with type (BUY/SELL), symbol, price, status, plus optional indicator fields (entry, SL, TP)
 - **Trade**: MT5 trade execution record with profit/loss tracking
 - **Settings**: MT5 credentials and trading parameters
 
@@ -29,8 +29,9 @@ An automated trading bridge that receives trading signals from TradingView indic
 ✅ Success rate and execution tracking
 ✅ Configurable lot size, spread, and slippage limits
 ✅ Auto-trade toggle for manual control
-✅ **NEW: Configurable TP/SL in pips** - Set default Take Profit and Stop Loss distances
-✅ **NEW: Auto-close on opposite signal** - Option to automatically close BUY when SELL signal comes (and vice versa)
+✅ **Configurable TP/SL in pips** - Set default Take Profit and Stop Loss distances
+✅ **Auto-close on opposite signal** - Option to automatically close BUY when SELL signal comes (and vice versa)
+✅ **Target Trend Indicator Support** - Accepts indicator-provided entry, SL, and TP levels from TradingView alerts (falls back to pip-based settings when not provided)
 
 ## Setup Instructions
 
@@ -70,6 +71,15 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **TARGET TREND INDICATOR INTEGRATION** (October 13, 2025)
+  - **Added indicator support to schema** - Extended Signal model with indicatorType, entryPrice, stopLoss, takeProfit fields
+  - **Fixed storage persistence** - MemStorage now correctly saves all indicator fields
+  - **Enhanced webhook parsing** - Supports flexible field naming (entry/entryPrice, stopLoss/sl, takeProfit1/tp1)
+  - **Intelligent trade execution** - Uses indicator-provided SL/TP when available, falls back to pip-based settings
+  - **Updated frontend display** - Signals table shows Entry, SL, TP columns with color coding (green for TP, red for SL)
+  - **Created comprehensive documentation** - TRADINGVIEW_WEBHOOK_GUIDE.md with BUY/SELL examples
+  - **Removed dead code** - Eliminated confusing legacy executeTrade function
+  - **Result: Full support for indicator-based trading with proper fallback to manual settings**
 - ✅ **MIGRATED TO WEBSOCKET** (October 13, 2025)
   - **Implemented real-time WebSocket communication** - Replaced HTTP polling with bidirectional WebSocket for instant trade execution
   - **Created TradingViewWebSocket_EA.mq5** - New MT5 Expert Advisor using native socket functions
