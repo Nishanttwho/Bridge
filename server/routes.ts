@@ -843,6 +843,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Update heartbeat
     await storage.updateMt5Heartbeat();
 
+    // Set up server-side ping interval to keep connection alive
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        console.log('[MT5-WS] Sending ping to keep connection alive');
+        ws.ping();
+      } else {
+        clearInterval(pingInterval);
+      }
+    }, 30000); // Ping every 30 seconds
+
+    // Store interval reference for cleanup
+    (ws as any).pingInterval = pingInterval;
+
     // Send any pending commands immediately
     const pendingCommands = await storage.getPendingCommands();
     for (const command of pendingCommands) {
@@ -972,6 +985,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('close', () => {
       console.log('[MT5-WS] MT5 client disconnected');
       mt5WsClients.delete(ws);
+      
+      // Clear ping interval
+      const interval = (ws as any).pingInterval;
+      if (interval) {
+        clearInterval(interval);
+      }
       
       // Broadcast stats update (connection status)
       storage.getStats().then(stats => {
