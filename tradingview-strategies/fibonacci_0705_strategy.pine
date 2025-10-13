@@ -37,6 +37,7 @@ var int buySetup_LiquidationBar = na
 var float buySetup_SwingHigh = na
 var int buySetup_SwingHighBar = na
 var bool buySetup_Active = false
+var bool buySetup_JustActivated = false
 
 // State variables for SELL setup
 var float sellSetup_PivotHighToLiquidate = na
@@ -46,6 +47,7 @@ var int sellSetup_LiquidationBar = na
 var float sellSetup_SwingLow = na
 var int sellSetup_SwingLowBar = na
 var bool sellSetup_Active = false
+var bool sellSetup_JustActivated = false
 
 // === BUY SETUP LOGIC ===
 
@@ -62,10 +64,12 @@ if not na(buySetup_PivotLowToLiquidate) and not buySetup_Active and low < buySet
     buySetup_SwingHigh := na
     
 // Step 3: After liquidation, wait for pivot high to form
+buySetup_JustActivated := false
 if not na(buySetup_LiquidationLow) and na(buySetup_SwingHigh) and not na(pivotH)
     buySetup_SwingHigh := pivotH[pivotLength]
     buySetup_SwingHighBar := bar_index - pivotLength
     buySetup_Active := true
+    buySetup_JustActivated := true
 
 // Calculate BUY Fibonacci zone
 float buyFibZoneHigh = na
@@ -132,10 +136,12 @@ if not na(sellSetup_PivotHighToLiquidate) and not sellSetup_Active and high > se
     sellSetup_SwingLow := na
 
 // Step 3: After liquidation, wait for pivot low to form
+sellSetup_JustActivated := false
 if not na(sellSetup_LiquidationHigh) and na(sellSetup_SwingLow) and not na(pivotL)
     sellSetup_SwingLow := pivotL[pivotLength]
     sellSetup_SwingLowBar := bar_index - pivotLength
     sellSetup_Active := true
+    sellSetup_JustActivated := true
 
 // Calculate SELL Fibonacci zone
 float sellFibZoneHigh = na
@@ -192,9 +198,8 @@ if sellSetup_Active and not na(pivotH) and pivotH[pivotLength] > sellSetup_Liqui
 // ============================================================================
 
 // 1. PLOT ALL PIVOT POINTS (MARKET STRUCTURE)
-if showAllPivots
-    plotshape(pivotL, "Pivot Low", shape.triangleup, location.belowbar, color.new(color.blue, 30), size=size.tiny)
-    plotshape(pivotH, "Pivot High", shape.triangledown, location.abovebar, color.new(color.orange, 30), size=size.tiny)
+plotshape(showAllPivots ? pivotL : na, "Pivot Low", shape.triangleup, location.belowbar, color.new(color.blue, 30), size=size.tiny)
+plotshape(showAllPivots ? pivotH : na, "Pivot High", shape.triangledown, location.abovebar, color.new(color.orange, 30), size=size.tiny)
 
 // 2. SHOW PIVOT BEING TRACKED FOR LIQUIDATION (with horizontal line)
 plot(not na(buySetup_PivotLowToLiquidate) ? buySetup_PivotLowToLiquidate : na, "Pivot Low Target", color.new(color.yellow, 0), 2, plot.style_cross)
@@ -213,14 +218,13 @@ plot(sellSetup_Active ? sellSetup_SwingLow : na, "Swing Low (SELL)", color.new(c
 plot(sellSetup_Active ? sellSetup_LiquidationHigh : na, "Liquidation High", color.new(color.lime, 0), 3, plot.style_circles)
 
 // 6. BUY FIBONACCI LEVELS (All levels with labels)
-if showFibLevels
-    plot(buySetup_Active ? buyFib_100 : na, "Fib 1.0 (100%)", color.new(color.lime, 0), 1, plot.style_line)
-    plot(buySetup_Active ? buyFib_786 : na, "Fib 0.786", color.new(color.purple, 40), 1, plot.style_line)
-    plot(buySetup_Active ? buyFib_618 : na, "Fib 0.618", color.new(color.orange, 40), 1, plot.style_line)
-    plot(buySetup_Active ? buyFib_50 : na, "Fib 0.5", color.new(color.gray, 40), 1, plot.style_line)
-    plot(buySetup_Active ? buyFib_382 : na, "Fib 0.382", color.new(color.blue, 40), 1, plot.style_line)
-    plot(buySetup_Active ? buyFib_236 : na, "Fib 0.236", color.new(color.teal, 40), 1, plot.style_line)
-    plot(buySetup_Active ? buyFib_0 : na, "Fib 0.0 (0%)", color.new(color.red, 0), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_100 : na, "Fib 1.0 (100%)", color.new(color.lime, 0), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_786 : na, "Fib 0.786", color.new(color.purple, 40), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_618 : na, "Fib 0.618", color.new(color.orange, 40), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_50 : na, "Fib 0.5", color.new(color.gray, 40), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_382 : na, "Fib 0.382", color.new(color.blue, 40), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_236 : na, "Fib 0.236", color.new(color.teal, 40), 1, plot.style_line)
+plot(showFibLevels and buySetup_Active ? buyFib_0 : na, "Fib 0.0 (0%)", color.new(color.red, 0), 1, plot.style_line)
 
 // 7. ENTRY ZONE (0.705-0.69) - HIGHLIGHTED
 plot(buySetup_Active ? buyFibZoneHigh : na, "Entry Zone High (0.705)", color.new(color.aqua, 0), 3)
@@ -231,14 +235,13 @@ buyZonePlotLow = plot(buySetup_Active ? buyFibZoneLow : na, color=na)
 fill(buyZonePlotHigh, buyZonePlotLow, color.new(color.aqua, 85), title="BUY Entry Zone")
 
 // 8. SELL FIBONACCI LEVELS (All levels)
-if showFibLevels
-    plot(sellSetup_Active ? sellFib_100 : na, "Fib 1.0 (100%)", color.new(color.red, 0), 1, plot.style_line)
-    plot(sellSetup_Active ? sellFib_786 : na, "Fib 0.786", color.new(color.purple, 40), 1, plot.style_line)
-    plot(sellSetup_Active ? sellFib_618 : na, "Fib 0.618", color.new(color.orange, 40), 1, plot.style_line)
-    plot(sellSetup_Active ? sellFib_50 : na, "Fib 0.5", color.new(color.gray, 40), 1, plot.style_line)
-    plot(sellSetup_Active ? sellFib_382 : na, "Fib 0.382", color.new(color.blue, 40), 1, plot.style_line)
-    plot(sellSetup_Active ? sellFib_236 : na, "Fib 0.236", color.new(color.teal, 40), 1, plot.style_line)
-    plot(sellSetup_Active ? sellFib_0 : na, "Fib 0.0 (0%)", color.new(color.lime, 0), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_100 : na, "Fib 1.0 (100%)", color.new(color.red, 0), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_786 : na, "Fib 0.786", color.new(color.purple, 40), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_618 : na, "Fib 0.618", color.new(color.orange, 40), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_50 : na, "Fib 0.5", color.new(color.gray, 40), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_382 : na, "Fib 0.382", color.new(color.blue, 40), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_236 : na, "Fib 0.236", color.new(color.teal, 40), 1, plot.style_line)
+plot(showFibLevels and sellSetup_Active ? sellFib_0 : na, "Fib 0.0 (0%)", color.new(color.lime, 0), 1, plot.style_line)
 
 // 9. SELL ENTRY ZONE (0.705-0.69) - HIGHLIGHTED
 plot(sellSetup_Active ? sellFibZoneHigh : na, "Entry Zone High (0.69)", color.new(color.fuchsia, 0), 3)
@@ -248,20 +251,16 @@ sellZonePlotHigh = plot(sellSetup_Active ? sellFibZoneHigh : na, color=na)
 sellZonePlotLow = plot(sellSetup_Active ? sellFibZoneLow : na, color=na)
 fill(sellZonePlotHigh, sellZonePlotLow, color.new(color.fuchsia, 85), title="SELL Entry Zone")
 
-// 10. LABELS FOR KEY POINTS
-if buySetup_Active and not na(buySetup_SwingHigh)
+// 10. LABELS FOR KEY POINTS (Only create once when setup activates)
+if buySetup_JustActivated
     label.new(bar_index, buySetup_SwingHigh, "SWING HIGH\n" + str.tostring(buySetup_SwingHigh, "#.####"), 
               color=color.new(color.lime, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
-
-if buySetup_Active and not na(buySetup_LiquidationLow)
     label.new(bar_index, buySetup_LiquidationLow, "LIQUIDATION LOW\n" + str.tostring(buySetup_LiquidationLow, "#.####"), 
               color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
 
-if sellSetup_Active and not na(sellSetup_SwingLow)
+if sellSetup_JustActivated
     label.new(bar_index, sellSetup_SwingLow, "SWING LOW\n" + str.tostring(sellSetup_SwingLow, "#.####"), 
               color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
-
-if sellSetup_Active and not na(sellSetup_LiquidationHigh)
     label.new(bar_index, sellSetup_LiquidationHigh, "LIQUIDATION HIGH\n" + str.tostring(sellSetup_LiquidationHigh, "#.####"), 
               color=color.new(color.lime, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
 
