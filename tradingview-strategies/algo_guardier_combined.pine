@@ -72,7 +72,7 @@ calcTrend() =>
     trend
 
 // Get 15-minute trend
-[itrend15m] = request.security(syminfo.tickerid, "15", calcTrend(), lookahead=barmerge.lookahead_on)
+itrend15m = request.security(syminfo.tickerid, "15", calcTrend(), lookahead=barmerge.lookahead_on)
 
 // ============================================================================
 // ALGO TRADING SIGNALS
