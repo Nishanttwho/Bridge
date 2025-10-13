@@ -228,11 +228,11 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
               </div>
 
-              {/* MT5 Server URL */}
+              {/* MT5 WebSocket URL */}
               <div className="rounded-lg border border-border bg-card p-4">
-                <h3 className="text-sm font-medium mb-2">MT5 Server URL</h3>
+                <h3 className="text-sm font-medium mb-2">MT5 WebSocket URL</h3>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Add this URL to MT5 WebRequest whitelist (Tools → Options → Expert Advisors)
+                  Use this as the ServerURL parameter in your MT5 Expert Advisor
                 </p>
                 <div className="flex gap-2">
                   <Input 
@@ -258,17 +258,20 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Note: The EA will automatically convert this to wss:// and connect to /mt5-ws path
+                </p>
               </div>
 
               {/* MT5 Connection */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">MT5 Connection</h3>
+                  <h3 className="text-sm font-semibold">MT5 WebSocket Connection</h3>
                   <a 
                     href="#" 
                     onClick={(e) => {
                       e.preventDefault();
-                      window.open('/mt5-files/INSTALLATION_GUIDE.md', '_blank');
+                      window.open('/mt5-files/INSTALLATION_GUIDE_WEBSOCKET.md', '_blank');
                     }}
                     className="text-xs text-primary hover:underline flex items-center gap-1"
                   >
@@ -277,7 +280,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   </a>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connect MT5 using HTTP polling (polls server every second for commands)
+                  Real-time bidirectional communication between MT5 and server using WebSocket protocol
                 </p>
                 
                 <FormField
@@ -304,8 +307,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
                 <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3">
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    📋 <strong>Setup Required:</strong> Install the TradingViewHTTP_EA.mq5 Expert Advisor in your MT5 terminal. 
-                    Check the <code className="bg-background/50 px-1 rounded">mt5-files/INSTALLATION_GUIDE.md</code> for complete instructions.
+                    📋 <strong>Setup Required:</strong> Install the TradingViewWebSocket_EA.mq5 Expert Advisor in your MT5 terminal. 
+                    Check the <code className="bg-background/50 px-1 rounded">mt5-files/INSTALLATION_GUIDE_WEBSOCKET.md</code> for complete instructions.
                   </p>
                 </div>
               </div>

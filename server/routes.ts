@@ -833,8 +833,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // MT5 WebSocket server setup (separate endpoint)
-  const mt5Wss = new WebSocketServer({ server: httpServer, path: '/mt5-ws' });
+  // MT5 WebSocket server setup (separate endpoint with noServer option)
+  const mt5Wss = new WebSocketServer({ noServer: true });
 
   mt5Wss.on('connection', async (ws: WebSocket, req) => {
     console.log('[MT5-WS] MT5 client attempting connection...');
@@ -989,6 +989,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('[MT5-WS] WebSocket error:', error);
       mt5WsClients.delete(ws);
     });
+  });
+
+  // Manual upgrade handler for MT5 WebSocket connections only
+  httpServer.on('upgrade', async (request, socket, head) => {
+    const pathname = new URL(request.url || '', `http://${request.headers.host}`).pathname;
+    
+    // Only handle /mt5-ws upgrades - let other paths be handled by the default WebSocket server
+    if (pathname === '/mt5-ws') {
+      console.log('[MT5-WS] Handling upgrade request from:', request.headers.host);
+      console.log('[MT5-WS] Headers:', request.headers);
+      
+      // Extract API secret from query params
+      const url = new URL(request.url || '', `http://${request.headers.host}`);
+      const apiSecret = url.searchParams.get('secret');
+      
+      // Verify API secret
+      const settings = await storage.getSettings();
+      if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
+        console.log('[MT5-WS] Unauthorized upgrade attempt - invalid secret');
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      
+      // Handle the upgrade
+      mt5Wss.handleUpgrade(request, socket, head, (ws) => {
+        mt5Wss.emit('connection', ws, request);
+      });
+    }
+    // For all other paths (like /ws), let the default WebSocket server handle them - do nothing here
   });
 
   return httpServer;
