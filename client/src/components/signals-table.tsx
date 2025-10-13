@@ -49,7 +49,9 @@ export function SignalsTable({ signals, isLoading }: SignalsTableProps) {
             <TableHead className="w-[120px]">Time</TableHead>
             <TableHead className="w-[100px]">Type</TableHead>
             <TableHead>Symbol</TableHead>
-            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Entry</TableHead>
+            <TableHead className="text-right">SL</TableHead>
+            <TableHead className="text-right">TP</TableHead>
             <TableHead className="w-[120px]">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -76,9 +78,22 @@ export function SignalsTable({ signals, isLoading }: SignalsTableProps) {
                   {signal.type}
                 </Badge>
               </TableCell>
-              <TableCell className="font-medium">{signal.symbol}</TableCell>
-              <TableCell className="text-right font-mono">
-                {signal.price ? parseFloat(signal.price).toFixed(5) : '—'}
+              <TableCell className="font-medium">
+                {signal.symbol}
+                {signal.indicatorType && (
+                  <Badge variant="outline" className="ml-2 text-xs">
+                    {signal.indicatorType}
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm">
+                {signal.entryPrice ? parseFloat(signal.entryPrice).toFixed(5) : '—'}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm text-destructive">
+                {signal.stopLoss ? parseFloat(signal.stopLoss).toFixed(5) : '—'}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm text-chart-2">
+                {signal.takeProfit ? parseFloat(signal.takeProfit).toFixed(5) : '—'}
               </TableCell>
               <TableCell>
                 {signal.status === 'pending' && (

@@ -87,6 +87,10 @@ export class MemStorage implements IStorage {
       source: insertSignal.source || 'tradingview',
       price: insertSignal.price ?? null,
       errorMessage: insertSignal.errorMessage ?? null,
+      indicatorType: insertSignal.indicatorType ?? null,
+      entryPrice: insertSignal.entryPrice ?? null,
+      stopLoss: insertSignal.stopLoss ?? null,
+      takeProfit: insertSignal.takeProfit ?? null,
     };
     this.signals.set(id, signal);
     return signal;
