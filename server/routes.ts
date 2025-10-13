@@ -844,14 +844,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.updateMt5Heartbeat();
 
     // Set up server-side ping interval to keep connection alive
-    const pingInterval = setInterval(() => {
+    const pingInterval = setInterval(async () => {
       if (ws.readyState === WebSocket.OPEN) {
         console.log('[MT5-WS] Sending ping to keep connection alive');
         ws.ping();
+        // Update heartbeat to keep isConnected status true
+        await storage.updateMt5Heartbeat();
       } else {
         clearInterval(pingInterval);
       }
-    }, 30000); // Ping every 30 seconds
+    }, 5000); // Ping every 5 seconds
 
     // Store interval reference for cleanup
     (ws as any).pingInterval = pingInterval;
