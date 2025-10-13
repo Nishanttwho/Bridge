@@ -805,8 +805,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  // WebSocket server setup for frontend clients
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // WebSocket server setup for frontend clients (noServer: true to handle upgrade manually)
+  const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('WebSocket client connected');
@@ -837,20 +837,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const mt5Wss = new WebSocketServer({ noServer: true });
 
   mt5Wss.on('connection', async (ws: WebSocket, req) => {
-    console.log('[MT5-WS] MT5 client attempting connection...');
-    
-    // Extract API secret from query params or headers
-    const url = new URL(req.url!, `http://${req.headers.host}`);
-    const apiSecret = url.searchParams.get('secret') || req.headers['x-mt5-api-secret'] as string;
-    
-    // Verify API secret
-    const settings = await storage.getSettings();
-    if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
-      console.log('[MT5-WS] Unauthorized connection attempt');
-      ws.close(1008, 'Unauthorized');
-      return;
-    }
-
     console.log('[MT5-WS] MT5 client connected successfully');
     mt5WsClients.add(ws);
     
@@ -991,20 +977,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Manual upgrade handler for MT5 WebSocket connections only
+  // Manual upgrade handler for all WebSocket connections
   httpServer.on('upgrade', async (request, socket, head) => {
     const pathname = new URL(request.url || '', `http://${request.headers.host}`).pathname;
     
-    // Only handle /mt5-ws upgrades - let other paths be handled by the default WebSocket server
-    if (pathname === '/mt5-ws') {
+    console.log('[WS] Upgrade request for:', pathname);
+    
+    if (pathname === '/ws') {
+      // Handle frontend WebSocket upgrades
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/mt5-ws') {
+      // Handle MT5 WebSocket upgrades
       console.log('[MT5-WS] Handling upgrade request from:', request.headers.host);
-      console.log('[MT5-WS] Headers:', request.headers);
       
-      // Extract API secret from query params
+      // Extract API secret from query params or headers
       const url = new URL(request.url || '', `http://${request.headers.host}`);
-      const apiSecret = url.searchParams.get('secret');
+      const apiSecret = url.searchParams.get('secret') || request.headers['x-mt5-api-secret'] as string;
       
-      // Verify API secret
+      // Verify API secret before upgrading
       const settings = await storage.getSettings();
       if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
         console.log('[MT5-WS] Unauthorized upgrade attempt - invalid secret');
@@ -1013,12 +1005,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
+      console.log('[MT5-WS] API secret verified, upgrading connection');
+      
       // Handle the upgrade
       mt5Wss.handleUpgrade(request, socket, head, (ws) => {
         mt5Wss.emit('connection', ws, request);
       });
+    } else {
+      // Reject unknown WebSocket paths
+      console.log('[WS] Unknown WebSocket path:', pathname);
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+      socket.destroy();
     }
-    // For all other paths (like /ws), let the default WebSocket server handle them - do nothing here
   });
 
   return httpServer;
