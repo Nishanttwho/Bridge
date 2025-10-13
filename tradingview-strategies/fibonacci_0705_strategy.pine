@@ -1,118 +1,184 @@
 //@version=5
-strategy("Fibonacci 0.705 Liquidity Grab Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+strategy("Fibonacci 0.705 Zone Retracement Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, max_bars_back=500)
 
 // ============================================================================
-// STRATEGY LOGIC (LIQUIDITY GRAB):
-// 1. Track previous swing high
-// 2. NEW swing must BREAK previous high (liquidity grab)
-// 3. After liquidity grab: Place Fibonacci from swing low to NEW high
-// 4. Wait for price to retrace and tap 0.705 Fibonacci level
-// 5. Entry condition: Candle that taps 0.705 must:
-//    - Close BULLISH (green candle)
-//    - Body close ABOVE 0.705 level
-// 6. Stop Loss: Below the entry candle
-// 7. Take Profit: The NEW swing high (liquidity grab high)
+// STRATEGY LOGIC (Simplified & Correct):
+// 
+// FOR BUY:
+// 1. Detect pivot low (local swing low)
+// 2. Price LIQUIDATES that pivot (goes below it)
+// 3. After liquidation, wait for price to make new swing high
+// 4. Draw Fib from liquidation low to swing high
+// 5. Wait for retracement to 0.705-0.69 zone
+// 6. Enter when candle taps zone and closes bullish (body above zone low)
+//
+// FOR SELL: VICE VERSA
 // ============================================================================
 
-// Input Parameters
-lookbackPeriod = input.int(50, "Swing Lookback Period", minval=20, maxval=200)
-fibLevel = input.float(0.705, "Fibonacci Level", minval=0.5, maxval=0.9, step=0.005)
+// Inputs
+pivotLength = input.int(5, "Pivot Length", minval=2, maxval=15)
+fibHigh = input.float(0.705, "Fib Zone High", step=0.005)
+fibLow = input.float(0.69, "Fib Zone Low", step=0.005)
 webhookUrl = input.string("https://your-replit-app.replit.dev/api/webhook", "Webhook URL")
 apiSecret = input.string("your-secret-key", "API Secret")
 
-// Track swing highs and lows
-var float previousSwingHigh = na
-var float currentSwingHigh = na
-var float swingLow = na
-var int currentSwingHighBar = na
-var int swingLowBar = na
-var bool liquidityGrabDetected = false
-var bool readyForRetracement = false
+// Detect pivots
+pivotH = ta.pivothigh(high, pivotLength, pivotLength)
+pivotL = ta.pivotlow(low, pivotLength, pivotLength)
 
-// Current high/low detection
-highestHigh = ta.highest(high, lookbackPeriod)
-lowestLow = ta.lowest(low, lookbackPeriod)
+// State variables for BUY setup
+var float buySetup_PivotLowToLiquidate = na
+var float buySetup_LiquidationLow = na
+var float buySetup_SwingHigh = na
+var bool buySetup_Active = false
 
-// Detect NEW swing high
-if high >= highestHigh and high > currentSwingHigh
-    // Check if this new high BREAKS the previous swing high (liquidity grab)
-    if not na(currentSwingHigh) and high > currentSwingHigh
-        previousSwingHigh := currentSwingHigh  // Store old high
-        currentSwingHigh := high  // Update to new high
-        currentSwingHighBar := bar_index
-        liquidityGrabDetected := true  // Liquidity grab confirmed!
-        readyForRetracement := true
-    else if na(currentSwingHigh)
-        // First swing high detected
-        currentSwingHigh := high
-        currentSwingHighBar := bar_index
-        liquidityGrabDetected := false
+// State variables for SELL setup
+var float sellSetup_PivotHighToLiquidate = na
+var float sellSetup_LiquidationHigh = na
+var float sellSetup_SwingLow = na
+var bool sellSetup_Active = false
 
-// Detect swing low (must come AFTER liquidity grab)
-if low <= lowestLow and liquidityGrabDetected
-    swingLow := low
-    swingLowBar := bar_index
+// === BUY SETUP LOGIC ===
 
-// Determine if we have valid setup (liquidity grab occurred, then low formed)
-validSetup = liquidityGrabDetected and not na(swingLow) and not na(currentSwingHigh) and swingLowBar < currentSwingHighBar
+// Step 1: Mark pivot low for potential liquidation
+if not na(pivotL) and not buySetup_Active
+    buySetup_PivotLowToLiquidate := pivotL[pivotLength]
 
-// Calculate Fibonacci 0.705 level (from low to liquidity grab high)
-fib705Level = na(swingLow) or na(currentSwingHigh) ? na : swingLow + (currentSwingHigh - swingLow) * fibLevel
-
-// Entry Conditions
-var float entryLevel = na
-var float slLevel = na
-var float tpLevel = na
-
-// Check if price tapped the 0.705 level
-priceTapped705 = not na(fib705Level) and (low <= fib705Level and high >= fib705Level)
-
-// Check if candle closed bullish (close > open)
-isBullishClose = close > open
-
-// Check if candle body stayed above 0.705 level
-bodyAbove705 = not na(fib705Level) and close > fib705Level
-
-// LONG Entry Signal (only after liquidity grab)
-longCondition = validSetup and readyForRetracement and priceTapped705 and isBullishClose and bodyAbove705 and strategy.position_size == 0
-
-// Execute Long Trade
-if longCondition
-    entryLevel := close
-    slLevel := low  // SL below the candle that tapped 0.705
-    tpLevel := currentSwingHigh  // TP at liquidity grab high
+// Step 2: Check if price liquidates the pivot low
+if not na(buySetup_PivotLowToLiquidate) and not buySetup_Active and low < buySetup_PivotLowToLiquidate
+    buySetup_LiquidationLow := low
+    buySetup_PivotLowToLiquidate := na  // Clear target
+    buySetup_SwingHigh := na  // Reset swing high
     
-    // Calculate values for webhook
-    slPips = math.abs(entryLevel - slLevel)
-    tpPips = math.abs(tpLevel - entryLevel)
-    
-    // Entry the trade
-    strategy.entry("Fib Long", strategy.long)
-    strategy.exit("Exit Long", "Fib Long", stop=slLevel, limit=tpLevel)
-    
-    // Send webhook to MT5
-    alert('{"symbol":"' + syminfo.ticker + '","type":"BUY","indicator":"fibonacci_705","entry":"' + str.tostring(entryLevel) + '","stopLoss":"' + str.tostring(slLevel) + '","takeProfit":"' + str.tostring(tpLevel) + '"}', alert.freq_once_per_bar)
-    
-    // Reset flags after entry
-    readyForRetracement := false
-    liquidityGrabDetected := false
+// Step 3: After liquidation, wait for pivot high to form
+if not na(buySetup_LiquidationLow) and na(buySetup_SwingHigh) and not na(pivotH)
+    buySetup_SwingHigh := pivotH[pivotLength]
+    buySetup_Active := true  // Setup is now active
 
-// Visual Elements
-plotshape(liquidityGrabDetected and bar_index == currentSwingHighBar, "Liquidity Grab", shape.triangleup, location.abovebar, color.new(color.yellow, 0), size=size.small, text="LIQ GRAB")
-plot(currentSwingHigh, "Current High (Liquidity Grab)", color=color.green, linewidth=2, style=plot.style_circles)
-plot(previousSwingHigh, "Previous High", color=color.orange, linewidth=1, style=plot.style_circles)
-plot(swingLow, "Swing Low", color=color.red, linewidth=2, style=plot.style_circles)
-plot(fib705Level, "Fib 0.705", color=color.blue, linewidth=2, style=plot.style_line)
+// Calculate BUY Fibonacci zone
+buyFibZoneHigh = na
+buyFibZoneLow = na
+if buySetup_Active and not na(buySetup_LiquidationLow) and not na(buySetup_SwingHigh)
+    range = buySetup_SwingHigh - buySetup_LiquidationLow
+    buyFibZoneHigh := buySetup_LiquidationLow + (range * fibHigh)
+    buyFibZoneLow := buySetup_LiquidationLow + (range * fibLow)
 
-// Labels for entry
-if longCondition
-    label.new(bar_index, low, "LONG (LIQ GRAB)\nEntry: " + str.tostring(entryLevel, "#.####") + "\nSL: " + str.tostring(slLevel, "#.####") + "\nTP: " + str.tostring(tpLevel, "#.####"), 
+// BUY Entry logic
+buyZoneTapped = buySetup_Active and not na(buyFibZoneLow) and not na(buyFibZoneHigh) and 
+                 low <= buyFibZoneHigh and low >= buyFibZoneLow
+
+buyValidClose = close > open and close >= buyFibZoneLow
+
+buyEntry = buyZoneTapped and buyValidClose and strategy.position_size == 0
+
+if buyEntry
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Exit Long", "Long", stop=low, limit=buySetup_SwingHigh)
+    
+    // Webhook
+    alert('{"symbol":"' + syminfo.ticker + '","type":"BUY","indicator":"fibonacci_705","entry":"' + str.tostring(close) + '","stopLoss":"' + str.tostring(low) + '","takeProfit":"' + str.tostring(buySetup_SwingHigh) + '"}', alert.freq_once_per_bar)
+    
+    // Reset BUY setup
+    buySetup_Active := false
+    buySetup_LiquidationLow := na
+    buySetup_SwingHigh := na
+
+// Reset BUY setup if structure breaks (new lower low forms)
+if buySetup_Active and not na(pivotL) and pivotL[pivotLength] < buySetup_LiquidationLow
+    buySetup_Active := false
+    buySetup_LiquidationLow := na
+    buySetup_SwingHigh := na
+
+// === SELL SETUP LOGIC ===
+
+// Step 1: Mark pivot high for potential liquidation
+if not na(pivotH) and not sellSetup_Active
+    sellSetup_PivotHighToLiquidate := pivotH[pivotLength]
+
+// Step 2: Check if price liquidates the pivot high
+if not na(sellSetup_PivotHighToLiquidate) and not sellSetup_Active and high > sellSetup_PivotHighToLiquidate
+    sellSetup_LiquidationHigh := high
+    sellSetup_PivotHighToLiquidate := na  // Clear target
+    sellSetup_SwingLow := na  // Reset swing low
+
+// Step 3: After liquidation, wait for pivot low to form
+if not na(sellSetup_LiquidationHigh) and na(sellSetup_SwingLow) and not na(pivotL)
+    sellSetup_SwingLow := pivotL[pivotLength]
+    sellSetup_Active := true  // Setup is now active
+
+// Calculate SELL Fibonacci zone
+sellFibZoneHigh = na
+sellFibZoneLow = na
+if sellSetup_Active and not na(sellSetup_LiquidationHigh) and not na(sellSetup_SwingLow)
+    range = sellSetup_LiquidationHigh - sellSetup_SwingLow
+    sellFibZoneHigh := sellSetup_LiquidationHigh - (range * fibLow)
+    sellFibZoneLow := sellSetup_LiquidationHigh - (range * fibHigh)
+
+// SELL Entry logic
+sellZoneTapped = sellSetup_Active and not na(sellFibZoneLow) and not na(sellFibZoneHigh) and 
+                  high >= sellFibZoneLow and high <= sellFibZoneHigh
+
+sellValidClose = close < open and close <= sellFibZoneHigh
+
+sellEntry = sellZoneTapped and sellValidClose and strategy.position_size == 0
+
+if sellEntry
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Exit Short", "Short", stop=high, limit=sellSetup_SwingLow)
+    
+    // Webhook
+    alert('{"symbol":"' + syminfo.ticker + '","type":"SELL","indicator":"fibonacci_705","entry":"' + str.tostring(close) + '","stopLoss":"' + str.tostring(high) + '","takeProfit":"' + str.tostring(sellSetup_SwingLow) + '"}', alert.freq_once_per_bar)
+    
+    // Reset SELL setup
+    sellSetup_Active := false
+    sellSetup_LiquidationHigh := na
+    sellSetup_SwingLow := na
+
+// Reset SELL setup if structure breaks (new higher high forms)
+if sellSetup_Active and not na(pivotH) and pivotH[pivotLength] > sellSetup_LiquidationHigh
+    sellSetup_Active := false
+    sellSetup_LiquidationHigh := na
+    sellSetup_SwingLow := na
+
+// === VISUALS ===
+
+// Plot pivots
+plotshape(pivotL, "Pivot Low", shape.triangleup, location.belowbar, color.new(color.gray, 60), size=size.tiny)
+plotshape(pivotH, "Pivot High", shape.triangledown, location.abovebar, color.new(color.gray, 60), size=size.tiny)
+
+// BUY Setup visuals
+plot(buySetup_Active ? buySetup_SwingHigh : na, "Swing High (BUY)", color.green, 2, plot.style_circles)
+plot(buySetup_Active ? buySetup_LiquidationLow : na, "Liquidation Low", color.red, 2, plot.style_circles)
+plot(buySetup_Active ? buyFibZoneHigh : na, "Fib 0.705 (BUY)", color.blue, 2)
+plot(buySetup_Active ? buyFibZoneLow : na, "Fib 0.69 (BUY)", color.blue, 2)
+
+buyZonePlotHigh = plot(buySetup_Active ? buyFibZoneHigh : na, color=na)
+buyZonePlotLow = plot(buySetup_Active ? buyFibZoneLow : na, color=na)
+fill(buyZonePlotHigh, buyZonePlotLow, color.new(color.blue, 90))
+
+// SELL Setup visuals
+plot(sellSetup_Active ? sellSetup_SwingLow : na, "Swing Low (SELL)", color.red, 2, plot.style_circles)
+plot(sellSetup_Active ? sellSetup_LiquidationHigh : na, "Liquidation High", color.green, 2, plot.style_circles)
+plot(sellSetup_Active ? sellFibZoneHigh : na, "Fib 0.69 (SELL)", color.orange, 2)
+plot(sellSetup_Active ? sellFibZoneLow : na, "Fib 0.705 (SELL)", color.orange, 2)
+
+sellZonePlotHigh = plot(sellSetup_Active ? sellFibZoneHigh : na, color=na)
+sellZonePlotLow = plot(sellSetup_Active ? sellFibZoneLow : na, color=na)
+fill(sellZonePlotHigh, sellZonePlotLow, color.new(color.orange, 90))
+
+// Liquidation markers
+plotshape(not na(buySetup_LiquidationLow) and na(buySetup_LiquidationLow[1]), "Low Liq", shape.xcross, location.belowbar, color.yellow, size=size.small, text="LIQ")
+plotshape(not na(sellSetup_LiquidationHigh) and na(sellSetup_LiquidationHigh[1]), "High Liq", shape.xcross, location.abovebar, color.yellow, size=size.small, text="LIQ")
+
+// Entry labels
+if buyEntry
+    label.new(bar_index, low, "LONG\n" + str.tostring(close, "#.####") + "\nSL:" + str.tostring(low, "#.####") + "\nTP:" + str.tostring(buySetup_SwingHigh, "#.####"), 
               color=color.green, textcolor=color.white, style=label.style_label_up, size=size.small)
 
-// Background color for valid setup (after liquidity grab)
-bgcolor(validSetup and readyForRetracement ? color.new(color.green, 95) : na, title="Valid Setup (After Liquidity Grab)")
+if sellEntry
+    label.new(bar_index, high, "SHORT\n" + str.tostring(close, "#.####") + "\nSL:" + str.tostring(high, "#.####") + "\nTP:" + str.tostring(sellSetup_SwingLow, "#.####"), 
+              color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
 
-// Draw liquidity grab marker
-if liquidityGrabDetected and bar_index == currentSwingHighBar
-    line.new(currentSwingHighBar, currentSwingHigh, currentSwingHighBar + 5, currentSwingHigh, color=color.yellow, width=2, style=line.style_dashed)
-    label.new(currentSwingHighBar, currentSwingHigh, "LIQUIDITY GRAB ⚡", color=color.yellow, textcolor=color.black, style=label.style_label_down, size=size.normal)
+// Background
+bgcolor(buySetup_Active ? color.new(color.green, 97) : na)
+bgcolor(sellSetup_Active ? color.new(color.red, 97) : na)

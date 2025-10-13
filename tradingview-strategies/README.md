@@ -4,20 +4,21 @@ This folder contains Pine Script strategies that integrate with your MT5 Trading
 
 ## Available Strategies
 
-### 1. Fibonacci 0.705 Retracement Strategy
+### 1. Fibonacci 0.705 Zone Retracement Strategy
 **File**: `fibonacci_0705_strategy.pine`  
 **Guide**: `FIBONACCI_STRATEGY_GUIDE.md`
 
 **Strategy Logic**:
-- Detects uptrends using swing high/low analysis
-- Places Fibonacci from swing low to swing high
-- Enters at 0.705 retracement level with confirmation
-- Entry requires: Price tap + Bullish close + Body above level
-- SL: Below entry candle | TP: Swing high
+- **Trend-Following**: Works for BOTH BUY (uptrend) and SELL (downtrend)
+- **Liquidation Detection**: Waits for small low (uptrend) or high (downtrend) to be taken out
+- **Fibonacci Placement**: From swing low to swing high (BUY) or high to low (SELL)
+- **Entry Zone**: 0.705-0.69 retracement zone (not single level)
+- **Entry Confirmation**: Candle taps zone + Bullish/Bearish close + Body in/past zone
+- **SL**: Below/Above entry candle | **TP**: Swing high/low
 
 **Best For**: Trending markets (Forex, Crypto, Indices)  
-**Timeframes**: 15min, 1H, 4H  
-**Win Rate**: ~65-70% in trending conditions
+**Timeframes**: 5min, 15min, 1H, 4H  
+**Win Rate**: ~65-75% in trending conditions
 
 ## How It Works
 

@@ -1,0 +1,67 @@
+This is a trend-following retracement strategy —
+we trade only in the direction of the main trend (for example, uptrend = only buy setups).
+
+🔹 Step-by-Step (For BUY / Uptrend)
+
+Market must be in an uptrend.
+That means the market is generally making higher highs and higher lows.
+
+When the price moves up, it will make:
+
+a high,
+
+then a low (retracement),
+
+then another move up (a smaller high).
+→ We don’t care if this smaller high breaks the previous one or not.
+
+After that, price will come down again and take out (liquidate) the previous small low it made earlier.
+This means it went a bit lower to clean stop losses — that’s okay and expected.
+
+Once that small low is taken, the price then moves up again — this shows the trend is continuing and the market just created a new swing low (the important one we’ll use).
+
+Now, after that upward move, we draw our Fibonacci retracement from:
+
+the swing low (the one that just formed after liquidation)
+
+to the new swing high (the recent top before retracement)
+
+Wait for price to retrace down to the Fibonacci zone between 0.705 and 0.69.
+
+This is our buy zone.
+
+Price must tap this zone,
+not close below it,
+and the candle that touches it must close bullish (green).
+
+Once that bullish candle forms inside that zone →
+✅ We take a Buy trade.
+
+Stop Loss (SL): just below that bullish candle.
+Take Profit (TP): the previous swing high.
+
+🔹 Important Notes
+
+We don’t care if the previous high is broken or not — that doesn’t matter in this system.
+
+What matters is:
+
+The structure of higher lows (uptrend).
+
+A liquidation of the small low (internal low).
+
+Then a retracement back to 0.705–0.69 zone with a bullish close.
+
+The same logic works for sell setups, just opposite:
+
+In downtrend (lower highs and lower lows),
+
+Price liquidates a small high,
+
+Retraces up to the 0.705–0.69 zone (from top to bottom),
+
+Closes bearish → take sell.
+
+🔹 In one simple line:
+
+“In an uptrend, after price takes out a small low and goes up again, wait for it to retrace to the 0.705–0.69 zone, reject it bullishly, and buy with target at the last high.”

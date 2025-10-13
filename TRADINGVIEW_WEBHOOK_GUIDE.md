@@ -8,18 +8,25 @@ This guide covers webhook integration for multiple trading strategies:
 
 ---
 
-## Fibonacci 0.705 Retracement Strategy (Liquidity Grab)
+## Fibonacci 0.705 Zone Retracement Strategy
 
 ### Strategy Overview
-Trades Fibonacci retracements **ONLY AFTER liquidity grabs**:
-- **Liquidity Grab**: Waits for price to BREAK previous swing high
-- **Swing Detection**: Detects swing low after liquidity grab
-- **Fibonacci Placement**: From swing low to liquidity grab high
-- **Entry Trigger**: Price retraces to 0.705 Fib level
-- **Confirmation**: Bullish candle close above 0.705
-- **Risk Levels**: SL below entry candle, TP at liquidity grab high
+**"In an uptrend, after price takes out a small low and goes up again, wait for it to retrace to the 0.705–0.69 zone, reject it bullishly, and buy with target at the last high."**
 
-**Key Rule**: "Only trade the retracement after a swing that breaks previous highs (takes liquidity)"
+**Works for BOTH BUY and SELL** (SELL is vice versa in downtrend)
+
+**For BUY (Uptrend):**
+- **Liquidation**: Price takes out small low (goes below it)
+- **Structure**: Creates new swing low, then swing high
+- **Fibonacci**: Drawn from swing low to swing high
+- **Entry Zone**: 0.705-0.69 retracement zone (not single level)
+- **Confirmation**: Candle taps zone, closes bullish (not below zone)
+- **Risk Levels**: SL below entry candle, TP at swing high
+
+**For SELL (Downtrend):**
+- Liquidates small high → Retraces to 0.705-0.69 zone → Bearish close → SELL
+
+**Key Rule**: "Don't care if highs break - just need liquidation of low (uptrend) or high (downtrend), then retracement to zone"
 
 ### Webhook Format
 The Fibonacci strategy automatically sends this JSON:
