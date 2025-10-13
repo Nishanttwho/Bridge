@@ -42,6 +42,16 @@ export function useWebSocket() {
             // Update connection status
             queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
             break;
+
+          case 'mt5_account':
+            // Update MT5 account info cache directly
+            queryClient.setQueryData(['/api/mt5-account'], message.data);
+            break;
+
+          case 'mt5_positions':
+            // Update MT5 positions cache directly
+            queryClient.setQueryData(['/api/mt5-positions'], message.data);
+            break;
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
