@@ -124,6 +124,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Close position endpoint
+  app.post("/api/close-position", async (req, res) => {
+    try {
+      const { ticket } = req.body;
+      
+      if (!ticket) {
+        return res.status(400).json({ error: "Missing ticket (position ID)" });
+      }
+
+      console.log(`[CLOSE-POSITION] Closing position ${ticket}`);
+
+      // Create CLOSE command
+      const command = await storage.enqueueCommand({
+        action: 'CLOSE',
+        positionId: ticket,
+        status: 'pending',
+      });
+
+      // Send command to MT5 via WebSocket immediately
+      sendCommandToMT5({
+        id: command.id,
+        action: 'CLOSE',
+        positionId: ticket,
+      });
+
+      // Mark as sent
+      await storage.markCommandAsSent(command.id);
+
+      console.log(`[CLOSE-POSITION] Command ${command.id} sent to MT5`);
+
+      res.json({ 
+        success: true, 
+        message: "Close command sent to MT5",
+        commandId: command.id
+      });
+    } catch (error) {
+      console.error('[CLOSE-POSITION] Error:', error);
+      res.status(500).json({ error: "Failed to close position" });
+    }
+  });
+
   // TradingView webhook endpoint
   app.post("/api/webhook", async (req, res) => {
     try {
