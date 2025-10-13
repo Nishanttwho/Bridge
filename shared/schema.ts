@@ -13,8 +13,8 @@ export const signals = pgTable("signals", {
   source: text("source").notNull().default('tradingview'), // Signal source
   status: text("status").notNull().default('pending'), // 'pending' | 'executed' | 'failed'
   errorMessage: text("error_message"),
-  // Target Trend indicator fields
-  indicatorType: text("indicator_type"), // 'target_trend' | null
+  // Strategy/Indicator fields
+  indicatorType: text("indicator_type"), // 'target_trend' | 'fibonacci_705' | null
   entryPrice: decimal("entry_price", { precision: 10, scale: 5 }), // Indicator entry price
   stopLoss: decimal("stop_loss", { precision: 10, scale: 5 }), // Indicator stop loss
   takeProfit: decimal("take_profit", { precision: 10, scale: 5 }), // Take profit (full exit)
