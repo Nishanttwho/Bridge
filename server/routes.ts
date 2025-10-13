@@ -309,6 +309,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const signalType = body.type || body.action || body.side || body.signal || 'BUY';
       const signalPrice = body.price || body.close || body.last || body.entry || null;
       
+      // Target Trend indicator fields
+      const indicatorType = body.indicator || body.indicatorType || null;
+      const entryPrice = body.entry || body.entryPrice || null;
+      const stopLoss = body.stopLoss || body.sl || body.stop_loss || null;
+      const takeProfit = body.takeProfit1 || body.tp1 || body.takeProfit || body.tp || null;
+      
       // Validate extracted data
       if (tradingViewSymbol === 'UNKNOWN') {
         console.log(`[WEBHOOK] No symbol found in payload`);
@@ -341,6 +347,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         price: signalPrice?.toString() || null,
         source: 'tradingview',
         status: 'pending',
+        indicatorType: indicatorType,
+        entryPrice: entryPrice?.toString() || null,
+        stopLoss: stopLoss?.toString() || null,
+        takeProfit: takeProfit?.toString() || null,
       };
 
       // Validate signal
@@ -397,18 +407,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Get configured TP/SL settings in PIPS
-        const slPips = parseFloat(settings.defaultSlPips || '20');
-        const tpPips = parseFloat(settings.defaultTpPips || '30');
-        const accountBalance = parseFloat(settings.accountBalance || '10000');
-        const riskPercentage = parseFloat(settings.riskPercentage || '1');
+        // Check if indicator provides SL/TP
+        const useIndicatorLevels = signal.indicatorType && signal.entryPrice && signal.stopLoss && signal.takeProfit;
         
-        console.log(`[WEBHOOK] Settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
-        console.log(`[WEBHOOK] MT5 will calculate exact SL/TP from current market price at execution time`);
-
-        // Calculate lot size based on configured risk
-        const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
-        console.log(`[WEBHOOK] Calculated volume: ${volume}`);
+        let volume: number;
+        let slValue: string | undefined;
+        let tpValue: string | undefined;
+        
+        if (useIndicatorLevels) {
+          // Use indicator-provided levels
+          console.log(`[WEBHOOK] Using Target Trend indicator levels:`);
+          console.log(`  Entry: ${signal.entryPrice}`);
+          console.log(`  SL: ${signal.stopLoss}`);
+          console.log(`  TP: ${signal.takeProfit}`);
+          
+          // Calculate risk in pips from indicator SL
+          const entry = parseFloat(signal.entryPrice!);
+          const sl = parseFloat(signal.stopLoss!);
+          const pipValue = getPipValue(signal.symbol);
+          const slDistance = Math.abs(entry - sl);
+          const slPips = slDistance / pipValue;
+          
+          // Calculate lot size based on risk
+          const accountBalance = parseFloat(settings.accountBalance || '10000');
+          const riskPercentage = parseFloat(settings.riskPercentage || '1');
+          volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
+          
+          // Use absolute price levels from indicator
+          slValue = signal.stopLoss!;
+          tpValue = signal.takeProfit!;
+          
+          console.log(`  Calculated volume: ${volume} lots (${slPips.toFixed(1)} pips risk)`);
+        } else {
+          // Use pip-based settings (legacy mode)
+          const slPips = parseFloat(settings.defaultSlPips || '20');
+          const tpPips = parseFloat(settings.defaultTpPips || '30');
+          const accountBalance = parseFloat(settings.accountBalance || '10000');
+          const riskPercentage = parseFloat(settings.riskPercentage || '1');
+          
+          console.log(`[WEBHOOK] Using pip-based settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
+          volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
+          
+          // MT5 will calculate SL/TP from pips
+          slValue = slPips.toString();
+          tpValue = tpPips.toString();
+        }
 
         // CRITICAL FIX 3: Update signal status to 'pending' BEFORE enqueueing command
         await storage.updateSignalStatus(signal.id, 'pending');
@@ -464,14 +507,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Enqueue TRADE command for MT5 to execute
-        // Send pip distances instead of absolute prices - MT5 will calculate from current market price
         const tradeCommand = await storage.enqueueCommand({
           action: 'TRADE',
           symbol: signal.symbol,
           type: signal.type,
           volume: volume.toString(),
-          slPips: slPips.toString(),
-          tpPips: tpPips.toString(),
+          stopLoss: slValue,
+          takeProfit: tpValue,
           signalId: signal.id,
           status: 'pending',
         });
