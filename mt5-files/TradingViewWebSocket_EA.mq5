@@ -823,7 +823,6 @@ void SendPositions()
          double tp = PositionGetDouble(POSITION_TP);
          double posProfit = PositionGetDouble(POSITION_PROFIT);
          double swap = PositionGetDouble(POSITION_SWAP);
-         double commission = PositionGetDouble(POSITION_COMMISSION);
          datetime openTime = (datetime)PositionGetInteger(POSITION_TIME);
          
          json += "{";
@@ -837,7 +836,6 @@ void SendPositions()
          json += "\"takeProfit\":" + DoubleToString(tp, 5) + ",";
          json += "\"profit\":" + DoubleToString(posProfit, 2) + ",";
          json += "\"swap\":" + DoubleToString(swap, 2) + ",";
-         json += "\"commission\":" + DoubleToString(commission, 2) + ",";
          json += "\"openTime\":\"" + TimeToString(openTime, TIME_DATE|TIME_SECONDS) + "\"";
          json += "}";
       }
