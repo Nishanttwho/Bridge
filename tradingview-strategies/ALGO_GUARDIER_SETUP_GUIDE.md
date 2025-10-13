@@ -65,9 +65,7 @@ The indicator sends alerts in this format:
   "symbol": "BTCUSDT",
   "type": "BUY",
   "indicator": "algo_guardier",
-  "entry": "50000.00",
-  "stopLoss": "49500.00",
-  "takeProfit": "51000.00"
+  "price": "50000.00"
 }
 ```
 
@@ -75,16 +73,17 @@ The indicator sends alerts in this format:
 - **symbol**: Trading pair ticker
 - **type**: BUY or SELL
 - **indicator**: Always "algo_guardier"
-- **entry**: Entry price (close price when signal triggered)
-- **stopLoss**: Stop loss level (low for BUY, high for SELL)
-- **takeProfit**: Take profit level (2:1 risk/reward ratio)
+- **price**: Entry price (close price when signal triggered)
+
+**Note**: Stop Loss and Take Profit are managed by your dashboard settings, not sent in the webhook.
 
 ## Risk Management
 
-### Default Settings
-- **Stop Loss**: Entry candle's low (for BUY) or high (for SELL)
-- **Take Profit**: 2:1 risk/reward ratio
-- Position size calculated by your dashboard based on risk percentage
+### Dashboard Settings
+- **Stop Loss**: Configured in your dashboard settings (fixed pips or ATR-based)
+- **Take Profit**: Configured in your dashboard settings (risk/reward ratio)
+- **Position Size**: Calculated by dashboard based on risk percentage
+- **Risk Per Trade**: Set in dashboard (default 1-2%)
 
 ### Symbol-Specific Optimization
 

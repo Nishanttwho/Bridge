@@ -122,25 +122,17 @@ buySignal = rawBuySignal and itrend15m == 1
 sellSignal = rawSellSignal and itrend15m == -1
 
 // ============================================================================
-// CALCULATE ENTRY, STOP LOSS, TAKE PROFIT
+// CALCULATE ENTRY PRICE
 // ============================================================================
 
 var float buyEntry = na
-var float buySL = na
-var float buyTP = na
 var float sellEntry = na
-var float sellSL = na
-var float sellTP = na
 
 if buySignal
     buyEntry := close
-    buySL := low  // Stop at the low of entry candle
-    buyTP := up + (buyEntry - buySL) * 2  // 2:1 Risk/Reward
 
 if sellSignal
     sellEntry := close
-    sellSL := high  // Stop at the high of entry candle
-    sellTP := dn - (sellSL - sellEntry) * 2  // 2:1 Risk/Reward
 
 // ============================================================================
 // PLOTTING
@@ -180,9 +172,7 @@ if buySignal
          '  "symbol": "' + syminfo.ticker + '",\n' + 
          '  "type": "BUY",\n' + 
          '  "indicator": "algo_guardier",\n' + 
-         '  "entry": "' + str.tostring(buyEntry) + '",\n' + 
-         '  "stopLoss": "' + str.tostring(buySL) + '",\n' + 
-         '  "takeProfit": "' + str.tostring(buyTP) + '"\n' + 
+         '  "price": "' + str.tostring(close) + '"\n' + 
          '}'
     alert(alertMessage, alert.freq_once_per_bar_close)
 
@@ -191,9 +181,7 @@ if sellSignal
          '  "symbol": "' + syminfo.ticker + '",\n' + 
          '  "type": "SELL",\n' + 
          '  "indicator": "algo_guardier",\n' + 
-         '  "entry": "' + str.tostring(sellEntry) + '",\n' + 
-         '  "stopLoss": "' + str.tostring(sellSL) + '",\n' + 
-         '  "takeProfit": "' + str.tostring(sellTP) + '"\n' + 
+         '  "price": "' + str.tostring(close) + '"\n' + 
          '}'
     alert(alertMessage, alert.freq_once_per_bar_close)
 
