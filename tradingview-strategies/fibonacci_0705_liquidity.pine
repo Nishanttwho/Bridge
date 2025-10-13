@@ -102,8 +102,8 @@ if not na(currentHigh) and not na(previousHigh) and currentHigh > previousHigh
     liquidityLowBar := lowBeforeHighBar
     
     // Calculate 0.705 retracement from low to new high
-    range = liquidityHigh - liquidityLow
-    ote705Level := liquidityHigh - (range * fibLevel)
+    swingRange = liquidityHigh - liquidityLow
+    ote705Level := liquidityHigh - (swingRange * fibLevel)
     
     // Reset downtrend setup
     liquidityGrabbedDown := false
@@ -117,8 +117,8 @@ if not na(currentLow) and not na(previousLow) and currentLow < previousLow
     liquidityHighBar := highBeforeLowBar
     
     // Calculate 0.705 retracement from high to new low
-    range = liquidityHighLevel - liquidityLowLevel
-    ote705LevelDown := liquidityLowLevel + (range * fibLevel)
+    swingRange = liquidityHighLevel - liquidityLowLevel
+    ote705LevelDown := liquidityLowLevel + (swingRange * fibLevel)
     
     // Reset uptrend setup
     liquidityGrabbedUp := false
