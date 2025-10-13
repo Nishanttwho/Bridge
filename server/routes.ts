@@ -104,18 +104,11 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       }
     }
 
-    // CRITICAL FIX: Get current market price from MT5 for accurate SL/TP calculation
-    // This ensures SL/TP distances are correct relative to actual execution price
-    const currentPrices = await mt5Service.getSymbolPrice(symbol);
-    if (!currentPrices) {
-      await storage.updateSignalStatus(signalId, 'failed', 'Failed to get current price from MT5');
+    const entryPrice = parseFloat(price || '0');
+    if (entryPrice === 0) {
+      await storage.updateSignalStatus(signalId, 'failed', 'Invalid entry price');
       return;
     }
-
-    // Use current market price (ASK for BUY, BID for SELL) instead of signal price
-    const entryPrice = type === 'BUY' ? currentPrices.ask : currentPrices.bid;
-    
-    console.log(`[TRADE] Using current market price: ${entryPrice} (${type === 'BUY' ? 'ASK' : 'BID'})`);
 
     // Calculate SL and TP based on settings with dynamic pip value
     const slPips = parseFloat(settings.defaultSlPips || '20');
@@ -404,49 +397,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Get configured TP/SL settings
+        // Get configured TP/SL settings in PIPS
         const slPips = parseFloat(settings.defaultSlPips || '20');
         const tpPips = parseFloat(settings.defaultTpPips || '30');
         const accountBalance = parseFloat(settings.accountBalance || '10000');
         const riskPercentage = parseFloat(settings.riskPercentage || '1');
         
         console.log(`[WEBHOOK] Settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
-        
-        // Calculate SL and TP prices using dynamic pip value
-        const entryPrice = parseFloat(signal.price || '0');
-        if (entryPrice <= 0) {
-          console.log(`[WEBHOOK] Invalid entry price: ${signal.price}`);
-          await storage.updateSignalStatus(signal.id, 'failed', 'Invalid entry price');
-          return res.json({ 
-            success: false, 
-            error: 'Invalid entry price',
-            signalId: signal.id
-          });
-        }
-        
-        const pipValue = getPipValue(signal.symbol); // Dynamic based on symbol type
-        const slDistance = slPips * pipValue;
-        const tpDistance = tpPips * pipValue;
-        
-        let stopLoss: number | null = null;
-        let takeProfit: number | null = null;
-        
-        if (entryPrice > 0) {
-          // Determine decimal places based on pip value
-          let decimalPlaces = 5; // Default for standard forex
-          if (pipValue >= 1.0) decimalPlaces = 2; // Crypto/indices
-          else if (pipValue === 0.01) decimalPlaces = 3; // JPY/metals
-          
-          if (signal.type === 'BUY') {
-            stopLoss = parseFloat((entryPrice - slDistance).toFixed(decimalPlaces));
-            takeProfit = parseFloat((entryPrice + tpDistance).toFixed(decimalPlaces));
-          } else { // SELL
-            stopLoss = parseFloat((entryPrice + slDistance).toFixed(decimalPlaces));
-            takeProfit = parseFloat((entryPrice - tpDistance).toFixed(decimalPlaces));
-          }
-          
-          console.log(`[WEBHOOK] Calculated - Entry: ${entryPrice}, SL: ${stopLoss} (${slPips} pips), TP: ${takeProfit} (${tpPips} pips), PipValue: ${pipValue}, Decimals: ${decimalPlaces}`);
-        }
+        console.log(`[WEBHOOK] MT5 will calculate exact SL/TP from current market price at execution time`);
 
         // Calculate lot size based on configured risk
         const volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
@@ -506,13 +464,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Enqueue TRADE command for MT5 to execute
+        // Send pip distances instead of absolute prices - MT5 will calculate from current market price
         const tradeCommand = await storage.enqueueCommand({
           action: 'TRADE',
           symbol: signal.symbol,
           type: signal.type,
           volume: volume.toString(),
-          stopLoss: stopLoss ? stopLoss.toString() : null,
-          takeProfit: takeProfit ? takeProfit.toString() : null,
+          slPips: slPips.toString(),
+          tpPips: tpPips.toString(),
           signalId: signal.id,
           status: 'pending',
         });

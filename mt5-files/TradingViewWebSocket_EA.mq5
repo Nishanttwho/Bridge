@@ -558,6 +558,29 @@ bool EnsureSymbolReady(string symbol)
 }
 
 //+------------------------------------------------------------------+
+//| Get pip value for symbol (dynamic based on symbol type)          |
+//+------------------------------------------------------------------+
+double GetPipValue(string symbol)
+{
+   // Check if it's a crypto pair (contains BTC, ETH, etc.)
+   if(StringFind(symbol, "BTC") >= 0 || StringFind(symbol, "ETH") >= 0 || 
+      StringFind(symbol, "XRP") >= 0 || StringFind(symbol, "LTC") >= 0)
+   {
+      return 1.0;  // 1 point = 1 pip for crypto
+   }
+   
+   // Check if it's a JPY pair or metal
+   if(StringFind(symbol, "JPY") >= 0 || StringFind(symbol, "XAU") >= 0 || 
+      StringFind(symbol, "XAG") >= 0)
+   {
+      return 0.01;  // 0.01 = 1 pip for JPY/metals
+   }
+   
+   // Standard forex pairs
+   return 0.0001;  // 0.0001 = 1 pip for standard forex
+}
+
+//+------------------------------------------------------------------+
 //| Execute trade                                                     |
 //+------------------------------------------------------------------+
 void ExecuteTrade(string commandId, string commandJson)
@@ -565,11 +588,11 @@ void ExecuteTrade(string commandId, string commandJson)
    string symbol = GetJsonValue(commandJson, "symbol");
    string type = GetJsonValue(commandJson, "type");
    double volume = StringToDouble(GetJsonValue(commandJson, "volume"));
-   double stopLoss = StringToDouble(GetJsonValue(commandJson, "stopLoss"));
-   double takeProfit = StringToDouble(GetJsonValue(commandJson, "takeProfit"));
+   double slPips = StringToDouble(GetJsonValue(commandJson, "slPips"));
+   double tpPips = StringToDouble(GetJsonValue(commandJson, "tpPips"));
    
    Print("[TRADE] Symbol: ", symbol, ", Type: ", type, ", Volume: ", volume);
-   Print("[TRADE] SL: ", stopLoss, ", TP: ", takeProfit);
+   Print("[TRADE] SL Pips: ", slPips, ", TP Pips: ", tpPips);
    
    if(symbol == "" || type == "")
    {
@@ -590,14 +613,37 @@ void ExecuteTrade(string commandId, string commandJson)
       return;
    }
    
+   // Get current market price for execution
    double currentPrice;
    if(type == "BUY")
       currentPrice = SymbolInfoDouble(symbol, SYMBOL_ASK);
    else
       currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
    
-   if(stopLoss > 0) stopLoss = NormalizePrice(symbol, stopLoss);
-   if(takeProfit > 0) takeProfit = NormalizePrice(symbol, takeProfit);
+   // Calculate SL/TP from current price using pip distances
+   double stopLoss = 0;
+   double takeProfit = 0;
+   double pipValue = GetPipValue(symbol);
+   
+   if(slPips > 0)
+   {
+      if(type == "BUY")
+         stopLoss = currentPrice - (slPips * pipValue);
+      else
+         stopLoss = currentPrice + (slPips * pipValue);
+      stopLoss = NormalizePrice(symbol, stopLoss);
+   }
+   
+   if(tpPips > 0)
+   {
+      if(type == "BUY")
+         takeProfit = currentPrice + (tpPips * pipValue);
+      else
+         takeProfit = currentPrice - (tpPips * pipValue);
+      takeProfit = NormalizePrice(symbol, takeProfit);
+   }
+   
+   Print("[TRADE] Current Price: ", currentPrice, ", Calculated SL: ", stopLoss, ", TP: ", takeProfit);
    
    // Validate SL/TP
    if(type == "BUY")
