@@ -56,6 +56,12 @@ else if syminfo.ticker == "YKBNK"
 // Display Settings
 show_signals = input.bool(true, "Show Buy/Sell Labels", group="Display Settings")
 
+// Alert Settings
+enable_alerts = input.bool(true, "Enable Alerts", group="Alert Settings")
+webhook_url = input.string("https://your-app.replit.app/api/webhook", "Webhook URL", group="Alert Settings", tooltip="Your Replit app webhook URL")
+alert_on_close = input.bool(true, "Alert on Bar Close Only", group="Alert Settings", tooltip="If true, alerts only trigger when bar closes")
+include_price = input.bool(true, "Include Price in Alert", group="Alert Settings")
+
 // ============================================================================
 // T3 CALCULATION
 // ============================================================================
@@ -116,24 +122,29 @@ plotshape(show_signals and sellSignal ? dn : na, title='Sell', text='SELL', loca
 // WEBHOOK ALERTS
 // ============================================================================
 
-if buySignal
+// Alert frequency setting
+alertFreq = alert_on_close ? alert.freq_once_per_bar_close : alert.freq_all
+
+if enable_alerts and buySignal
+    // Build JSON message
+    priceField = include_price ? ',\n  "price": "' + str.tostring(close) + '"' : ''
     alertMessage = '{\n' + 
          '  "symbol": "' + syminfo.ticker + '",\n' + 
          '  "type": "BUY",\n' + 
-         '  "indicator": "algo",\n' + 
-         '  "price": "' + str.tostring(close) + '"\n' + 
+         '  "indicator": "algo"' + priceField + '\n' + 
          '}'
-    alert(alertMessage, alert.freq_once_per_bar_close)
+    alert(alertMessage, alertFreq)
 
-if sellSignal
+if enable_alerts and sellSignal
+    // Build JSON message
+    priceField = include_price ? ',\n  "price": "' + str.tostring(close) + '"' : ''
     alertMessage = '{\n' + 
          '  "symbol": "' + syminfo.ticker + '",\n' + 
          '  "type": "SELL",\n' + 
-         '  "indicator": "algo",\n' + 
-         '  "price": "' + str.tostring(close) + '"\n' + 
+         '  "indicator": "algo"' + priceField + '\n' + 
          '}'
-    alert(alertMessage, alert.freq_once_per_bar_close)
+    alert(alertMessage, alertFreq)
 
-// Simple alert conditions for testing
-alertcondition(buySignal, title='Algo Buy Signal', message='BUY Signal')
-alertcondition(sellSignal, title='Algo Sell Signal', message='SELL Signal')
+// Simple alert conditions for manual alert creation
+alertcondition(buySignal, title='Algo Buy Signal', message='BUY Signal - {{ticker}} @ {{close}}')
+alertcondition(sellSignal, title='Algo Sell Signal', message='SELL Signal - {{ticker}} @ {{close}}')
