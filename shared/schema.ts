@@ -13,6 +13,13 @@ export const signals = pgTable("signals", {
   source: text("source").notNull().default('tradingview'), // Signal source
   status: text("status").notNull().default('pending'), // 'pending' | 'executed' | 'failed'
   errorMessage: text("error_message"),
+  // Target Trend indicator fields
+  indicatorType: text("indicator_type"), // 'target_trend' | 'simple' | null
+  entryPrice: decimal("entry_price", { precision: 10, scale: 5 }), // Indicator entry price
+  stopLoss: decimal("stop_loss", { precision: 10, scale: 5 }), // Indicator stop loss
+  takeProfit1: decimal("take_profit_1", { precision: 10, scale: 5 }), // First target
+  takeProfit2: decimal("take_profit_2", { precision: 10, scale: 5 }), // Second target
+  takeProfit3: decimal("take_profit_3", { precision: 10, scale: 5 }), // Third target
 });
 
 // Trade execution records
