@@ -24,13 +24,19 @@ export function useWebSocket() {
 
         switch (message.type) {
           case 'signal':
-            // Invalidate signals query to refetch
-            queryClient.invalidateQueries({ queryKey: ['/api/signals'] });
+            // Update signals cache directly by prepending new signal
+            queryClient.setQueryData(['/api/signals'], (old: any[] = []) => {
+              // Add new signal to the beginning, limit to 50 items
+              return [message.data, ...old].slice(0, 50);
+            });
             break;
 
           case 'trade':
-            // Invalidate trades query to refetch
-            queryClient.invalidateQueries({ queryKey: ['/api/trades'] });
+            // Update trades cache directly by prepending new trade
+            queryClient.setQueryData(['/api/trades'], (old: any[] = []) => {
+              // Add new trade to the beginning, limit to 50 items
+              return [message.data, ...old].slice(0, 50);
+            });
             break;
 
           case 'stats':
@@ -39,8 +45,11 @@ export function useWebSocket() {
             break;
 
           case 'connection':
-            // Update connection status
-            queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+            // Update stats to reflect connection status change
+            queryClient.setQueryData(['/api/stats'], (old: any) => ({
+              ...old,
+              isConnected: message.data?.isConnected ?? false,
+            }));
             break;
 
           case 'mt5_account':
