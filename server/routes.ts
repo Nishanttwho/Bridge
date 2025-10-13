@@ -700,6 +700,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Handle messages from client (e.g., close position requests)
+    ws.on('message', async (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log('[CLIENT-WS] Received message:', message);
+
+        // Handle close position request
+        if (message.type === 'close_position' && message.ticket) {
+          console.log(`[CLIENT-WS] Closing position ${message.ticket}`);
+
+          // Create CLOSE command
+          const command = await storage.enqueueCommand({
+            action: 'CLOSE',
+            positionId: message.ticket,
+            status: 'pending',
+          });
+
+          // Send command to MT5 via WebSocket immediately
+          sendCommandToMT5({
+            id: command.id,
+            action: 'CLOSE',
+            positionId: message.ticket,
+          });
+
+          // Mark as sent
+          await storage.markCommandAsSent(command.id);
+
+          console.log(`[CLIENT-WS] Close command ${command.id} sent to MT5`);
+        }
+      } catch (error) {
+        console.error('[CLIENT-WS] Error processing message:', error);
+      }
+    });
+
     ws.on('close', () => {
       console.log('WebSocket client disconnected');
       wsClients.delete(ws);

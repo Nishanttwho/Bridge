@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Activity, TrendingUp, CheckCircle2, Percent, Settings as SettingsIcon, Wallet, X, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import { SignalsTable } from "@/components/signals-table";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { ConnectionStatus } from "@/components/connection-status";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DashboardStats, Signal, MT5AccountInfo, MT5Position } from "@shared/schema";
 
@@ -17,16 +16,14 @@ export default function Dashboard() {
   const { toast } = useToast();
   
   // Initialize WebSocket connection
-  useWebSocket();
+  const ws = useWebSocket();
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ['/api/stats'],
-    refetchInterval: 5000,
   });
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery<Signal[]>({
     queryKey: ['/api/signals'],
-    refetchInterval: 3000,
   });
 
   const { data: mt5Account } = useQuery<MT5AccountInfo>({
@@ -37,24 +34,24 @@ export default function Dashboard() {
     queryKey: ['/api/mt5-positions'],
   });
 
-  const closePositionMutation = useMutation({
-    mutationFn: async (ticket: string) => {
-      return apiRequest('POST', '/api/close-position', { ticket });
-    },
-    onSuccess: () => {
+  const closePosition = (ticket: string) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'close_position',
+        ticket,
+      }));
       toast({
         title: "Position closing",
         description: "Close command sent to MT5",
       });
-    },
-    onError: () => {
+    } else {
       toast({
         title: "Error",
-        description: "Failed to close position",
+        description: "WebSocket not connected",
         variant: "destructive",
       });
-    },
-  });
+    }
+  };
 
   const isConnected = stats?.isConnected ?? false;
   const successRate = stats?.successRate ?? 0;
@@ -260,8 +257,7 @@ export default function Dashboard() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => closePositionMutation.mutate(position.ticket)}
-                      disabled={closePositionMutation.isPending}
+                      onClick={() => closePosition(position.ticket)}
                       className="ml-4"
                       data-testid={`button-close-${position.ticket}`}
                     >
