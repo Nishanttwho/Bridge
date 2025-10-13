@@ -71,8 +71,16 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **OTE INDICATOR UPGRADED TO V2.0** (January 2025)
+  - **Fixed indicator lines to move with chart** - Uses extend=extend.right for dynamic line positioning
+  - **Upgraded to precise 0.705 level** - No longer uses zones, only the exact 0.705 Fibonacci level
+  - **Advanced trend detection** - Market structure analysis (higher highs/higher lows) + multi-timeframe confirmation
+  - **Rejection-based entry logic** - Price must tap 0.705 and close opposite color candle
+  - **Improved SL/TP placement** - SL at rejection candle low/high, TP at dealing range high/low
+  - **HTF trend confirmation** - Shows both current timeframe and higher timeframe trend in info table
+  - **Updated webhook indicator name** - Changed from "ote" to "ote_0705" for clarity
 - ✅ **ICT OTE INDICATOR CREATED** (January 2025)
-  - **Created comprehensive OTE Pine Script indicator** - Implements ICT's Optimal Trade Entry concept with 62-79% Fibonacci retracement zones
+  - **Created comprehensive OTE Pine Script indicator** - Implements ICT's Optimal Trade Entry concept
   - **Automatic trend detection** - Uses EMA to identify uptrends/downtrends
   - **Swing point identification** - Automatically detects swing lows and highs for zone calculation
   - **Entry confirmation logic** - Validates candle touches zone and closes in trend direction

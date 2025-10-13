@@ -4,24 +4,25 @@ This folder contains Pine Script indicators and strategies designed to work seam
 
 ## 📊 Available Indicators
 
-### 1. ICT OTE (Optimal Trade Entry) Indicator
+### 1. ICT OTE (Optimal Trade Entry) Indicator - 0.705 Level
 **File**: `ote_indicator.pine`
 
-**Concept**: Enter trades at optimal retracement zones (62-79% Fibonacci) within a trending market.
+**Concept**: Enter trades at the precise 0.705 Fibonacci retracement level with rejection confirmation in a trending market.
 
 **Key Features**:
-- ✅ Automatic trend detection via EMA
-- ✅ Swing point identification
-- ✅ OTE zone visualization (62-79% or narrow 70.5-69%)
-- ✅ Entry confirmation logic (candle must close in direction)
-- ✅ Automatic SL/TP calculation
-- ✅ Real-time info table with trend and levels
+- ✅ **Advanced trend detection** via market structure (higher highs/lows) + multi-timeframe confirmation
+- ✅ Swing point identification for dealing range
+- ✅ **Single 0.705 level visualization** (precise entry level, not a zone)
+- ✅ **Rejection-based entry logic** (candle must tap level and close opposite color)
+- ✅ Automatic SL/TP calculation (SL at rejection candle, TP at dealing range)
+- ✅ Real-time info table with HTF trend, current trend, and levels
 - ✅ Webhook integration with MT5
+- ✅ **Lines move with chart** for accurate real-time tracking
 
 **Best For**:
-- Trend following with precise entries
+- Precision entries at optimal retracement level
 - Scalping, day trading, and swing trading
-- High probability retracement setups
+- High probability rejection setups with long-term trend confirmation
 
 **Setup Guide**: See [OTE_STRATEGY_GUIDE.md](./OTE_STRATEGY_GUIDE.md)
 
@@ -85,10 +86,11 @@ Each indicator has configurable settings:
 
 **OTE Indicator**:
 - Webhook URL: Your server endpoint
-- OTE Zone: Standard (62-79%) or Narrow (70.5-69%)
-- EMA Length: Trend detection period (default: 50)
+- Fibonacci Level: 0.705 (default) - customizable for testing
+- Higher Timeframe: Daily (default) - for long-term trend confirmation
 - Swing Lookback: Bars for swing detection (default: 10)
-- Visual preferences (zones, swing points, transparency)
+- Market Structure Period: Bars for structure analysis (default: 20)
+- Visual preferences (level line, swing points, dealing range)
 - Enable/disable alerts
 
 **Note**: Position sizing is configured in the backend server settings, not in the indicator.
@@ -146,13 +148,14 @@ All indicators send standardized JSON format:
 
 ## 🎯 Indicator Comparison
 
-| Feature | OTE | Fibonacci 0.705 | Target Trend |
-|---------|-----|-----------------|--------------|
-| **Automatic Trend** | ✅ EMA-based | ✅ Structure-based | ⚙️ Custom |
-| **Zone Detection** | ✅ 62-79% | ✅ 70.5-69% | ❌ Manual |
-| **Entry Logic** | ✅ Candle close | ✅ Rejection | ⚙️ Custom |
-| **SL/TP Calculation** | ✅ Auto | ✅ Auto | ⚙️ Manual |
-| **Visual Zones** | ✅ Yes | ✅ Yes | ⚙️ Optional |
+| Feature | OTE 0.705 | Fibonacci 0.705 | Target Trend |
+|---------|-----------|-----------------|--------------|
+| **Automatic Trend** | ✅ Market Structure + HTF | ✅ Structure-based | ⚙️ Custom |
+| **Level Detection** | ✅ 0.705 precise | ✅ 70.5-69% | ❌ Manual |
+| **Entry Logic** | ✅ Tap + Rejection | ✅ Rejection | ⚙️ Custom |
+| **SL/TP Calculation** | ✅ Auto (candle/range) | ✅ Auto | ⚙️ Manual |
+| **Visual Display** | ✅ Level + Range | ✅ Yes | ⚙️ Optional |
+| **HTF Confirmation** | ✅ Yes | ❌ No | ⚙️ Optional |
 | **Best For** | All traders | ICT traders | Custom systems |
 | **Complexity** | Medium | High | Low |
 
@@ -267,19 +270,19 @@ Indicators send entry, SL, and TP prices; the backend calculates optimal lot siz
 ## 📈 Performance Tips
 
 ### For Scalping (5m-15m)
-- Use narrow OTE zone (70.5-69%)
+- Use 0.705 level with 15m HTF confirmation
 - Increase swing lookback to 15-20
 - Target 1:1 or 1:2 risk:reward
 - Trade during active sessions only
 
 ### For Day Trading (15m-1H)
-- Use standard OTE zone (62-79%)
+- Use 0.705 level with 1H or 4H HTF confirmation
 - Default swing lookback (10)
 - Target 1:2 or 1:3 risk:reward
 - Focus on major pairs
 
 ### For Swing Trading (4H-Daily)
-- Use standard or wider zone
+- Use 0.705 level with Daily or Weekly HTF confirmation
 - Decrease swing lookback to 5-7
 - Target 1:3+ risk:reward
 - Trade all pairs
@@ -288,16 +291,23 @@ Indicators send entry, SL, and TP prices; the backend calculates optimal lot siz
 
 ## 🔄 Updates & Changelog
 
-### Latest Version: 1.0.0
+### Latest Version: 2.0.0
+
+**OTE Indicator v2.0.0** *(Latest - January 2025)*
+- ✅ **Fixed indicator lines to move with chart** (uses extend=extend.right)
+- ✅ **Upgraded to 0.705 precise level** (no longer a zone)
+- ✅ **Advanced multi-timeframe trend detection** (market structure + HTF confirmation)
+- ✅ **Rejection-based entry** (price must tap 0.705 and close opposite color)
+- ✅ **Improved SL/TP placement** (SL at rejection candle, TP at dealing range)
+- ✅ Displays dealing range high/low for context
+- ✅ Real-time HTF trend confirmation in info table
+- ✅ Webhook indicator name updated to "ote_0705"
 
 **OTE Indicator v1.0.0**
-- Initial release
-- Automatic trend detection
-- Swing point identification
-- OTE zone calculation and visualization
-- Entry confirmation logic
-- Webhook integration
-- Customizable settings
+- Initial release with zone-based entries
+- EMA trend detection
+- Basic swing point identification
+- OTE zone (62-79% or 70.5-69%) visualization
 
 **Fibonacci 0.705 Strategy**
 - Coming soon
