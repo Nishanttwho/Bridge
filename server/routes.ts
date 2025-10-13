@@ -104,11 +104,18 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       }
     }
 
-    const entryPrice = parseFloat(price || '0');
-    if (entryPrice === 0) {
-      await storage.updateSignalStatus(signalId, 'failed', 'Invalid entry price');
+    // CRITICAL FIX: Get current market price from MT5 for accurate SL/TP calculation
+    // This ensures SL/TP distances are correct relative to actual execution price
+    const currentPrices = await mt5Service.getSymbolPrice(symbol);
+    if (!currentPrices) {
+      await storage.updateSignalStatus(signalId, 'failed', 'Failed to get current price from MT5');
       return;
     }
+
+    // Use current market price (ASK for BUY, BID for SELL) instead of signal price
+    const entryPrice = type === 'BUY' ? currentPrices.ask : currentPrices.bid;
+    
+    console.log(`[TRADE] Using current market price: ${entryPrice} (${type === 'BUY' ? 'ASK' : 'BID'})`);
 
     // Calculate SL and TP based on settings with dynamic pip value
     const slPips = parseFloat(settings.defaultSlPips || '20');
@@ -197,7 +204,7 @@ async function executeTrade(signalId: string, type: string, symbol: string, pric
       symbol,
       type,
       volume: volume.toString(),
-      openPrice: price || '0',
+      openPrice: entryPrice.toString(), // Use actual execution price, not signal price
       stopLoss: stopLoss.toString(),
       takeProfit: takeProfit.toString(),
       status: 'open',
