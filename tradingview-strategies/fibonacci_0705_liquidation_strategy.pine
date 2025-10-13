@@ -49,8 +49,8 @@ var float buy_SwingHigh = na
 var int buy_SwingHighBar = na
 var bool buy_SetupActive = false
 
-// Step 1: Mark small pivot low (in uptrend)
-if not na(pivotL) and uptrend and na(buy_SmallPivotLow)
+// Step 1: Mark small pivot low (in uptrend or relaxed filter)
+if not na(pivotL) and na(buy_SmallPivotLow) and na(buy_LiquidationLow)
     buy_SmallPivotLow := pivotL[pivotLength]
     buy_SmallPivotBar := bar_index - pivotLength
 
@@ -118,8 +118,8 @@ var float sell_SwingLow = na
 var int sell_SwingLowBar = na
 var bool sell_SetupActive = false
 
-// Step 1: Mark small pivot high (in downtrend)
-if not na(pivotH) and downtrend and na(sell_SmallPivotHigh)
+// Step 1: Mark small pivot high (in downtrend or relaxed filter)
+if not na(pivotH) and na(sell_SmallPivotHigh) and na(sell_LiquidationHigh)
     sell_SmallPivotHigh := pivotH[pivotLength]
     sell_SmallPivotBar := bar_index - pivotLength
 
@@ -185,6 +185,10 @@ plot(ma, "Trend MA", color.new(color.yellow, 50), 2)
 // Show all pivots
 plotshape(showPivots ? pivotL : na, "Pivot Low", shape.triangleup, location.belowbar, color.new(color.blue, 30), size=size.tiny)
 plotshape(showPivots ? pivotH : na, "Pivot High", shape.triangledown, location.abovebar, color.new(color.orange, 30), size=size.tiny)
+
+// Mark liquidation events
+plotshape(not na(buy_LiquidationLow) and na(buy_LiquidationLow[1]) ? true : na, "Liq Low", shape.xcross, location.belowbar, color.new(color.red, 0), size=size.normal, text="LIQ")
+plotshape(not na(sell_LiquidationHigh) and na(sell_LiquidationHigh[1]) ? true : na, "Liq High", shape.xcross, location.abovebar, color.new(color.lime, 0), size=size.normal, text="LIQ")
 
 // BUY Setup - Liquidation point and Swing High
 plot(buy_SetupActive ? buy_LiquidationLow : na, "Liquidation Low", color.new(color.red, 0), 3, plot.style_cross)
