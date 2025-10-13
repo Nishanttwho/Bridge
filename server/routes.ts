@@ -719,16 +719,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       data: stats,
     });
 
-    // Handle messages from MT5 (execution reports)
+    // Handle messages from MT5 (execution reports, account info, positions)
     ws.on('message', async (data: Buffer) => {
       try {
         const report = JSON.parse(data.toString());
-        console.log(`[MT5-WS] Received report:`, report);
+        console.log(`[MT5-WS] Received message:`, report);
 
+        // Handle account info messages
+        if (report.type === 'ACCOUNT_INFO') {
+          broadcast({
+            type: 'mt5_account',
+            data: {
+              balance: report.balance,
+              equity: report.equity,
+              margin: report.margin,
+              freeMargin: report.freeMargin,
+              marginLevel: report.marginLevel,
+              profit: report.profit,
+            }
+          });
+          return;
+        }
+
+        // Handle positions messages
+        if (report.type === 'POSITIONS') {
+          broadcast({
+            type: 'mt5_positions',
+            data: report.positions.map((pos: any) => ({
+              ticket: pos.ticket,
+              symbol: pos.symbol,
+              type: pos.type,
+              volume: pos.volume,
+              openPrice: pos.openPrice,
+              currentPrice: pos.currentPrice,
+              stopLoss: pos.stopLoss,
+              takeProfit: pos.takeProfit,
+              profit: pos.profit,
+              swap: pos.swap,
+              commission: pos.commission,
+              openTime: pos.openTime,
+            }))
+          });
+          return;
+        }
+
+        // Handle execution reports (existing logic)
         const { commandId, success, orderId, positionId, error: errorMessage } = report;
 
         if (!commandId) {
-          console.log('[MT5-WS] Missing commandId in report');
+          console.log('[MT5-WS] Message without commandId (not an execution report)');
           return;
         }
 
