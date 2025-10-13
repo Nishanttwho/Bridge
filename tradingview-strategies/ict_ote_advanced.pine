@@ -107,9 +107,7 @@ if detectLiquidity and showEqualLevels
         for i = 0 to array.size(equalHighs) - 1
             if math.abs(array.get(equalHighs, i) - currentHigh) <= tolerance
                 // Found equal high - mark it
-                line.new(array.get(equalHighBars, i), array.get(equalHighs, i), 
-                         bar_index - pivotLength, currentHigh, 
-                         color=color.new(bearColor, 50), width=2, style=line.style_dotted)
+                line.new(array.get(equalHighBars, i), array.get(equalHighs, i), bar_index - pivotLength, currentHigh, color=color.new(bearColor, 50), width=2, style=line.style_dotted)
         
         array.push(equalHighs, currentHigh)
         array.push(equalHighBars, bar_index - pivotLength)
@@ -128,9 +126,7 @@ if detectLiquidity and showEqualLevels
         for i = 0 to array.size(equalLows) - 1
             if math.abs(array.get(equalLows, i) - currentLow) <= tolerance
                 // Found equal low - mark it
-                line.new(array.get(equalLowBars, i), array.get(equalLows, i), 
-                         bar_index - pivotLength, currentLow, 
-                         color=color.new(bullColor, 50), width=2, style=line.style_dotted)
+                line.new(array.get(equalLowBars, i), array.get(equalLows, i), bar_index - pivotLength, currentLow, color=color.new(bullColor, 50), width=2, style=line.style_dotted)
         
         array.push(equalLows, currentLow)
         array.push(equalLowBars, bar_index - pivotLength)
@@ -152,9 +148,7 @@ if detectLiquidity
         if low < lowLevel and close > lowLevel
             bullLiqSweep := true
             sweepLevel := lowLevel
-            label.new(bar_index, low, "💧 SWEEP", 
-                     color=color.new(bullColor, 0), textcolor=color.white, 
-                     style=label.style_label_up, size=size.tiny)
+            label.new(bar_index, low, "💧 SWEEP", color=color.new(bullColor, 0), textcolor=color.white, style=label.style_label_up, size=size.tiny)
     
     // Bearish Sweep (sweep above equal highs)
     for i = 0 to array.size(equalHighs) - 1
@@ -162,9 +156,7 @@ if detectLiquidity
         if high > highLevel and close < highLevel
             bearLiqSweep := true
             sweepLevel := highLevel
-            label.new(bar_index, high, "💧 SWEEP", 
-                     color=color.new(bearColor, 0), textcolor=color.white, 
-                     style=label.style_label_down, size=size.tiny)
+            label.new(bar_index, high, "💧 SWEEP", color=color.new(bearColor, 0), textcolor=color.white, style=label.style_label_down, size=size.tiny)
 
 // ==================== FAIR VALUE GAP (FVG) DETECTION ====================
 // Bullish FVG: Gap between candle 1 high and candle 3 low
@@ -179,14 +171,10 @@ bearFVGBottom = bearFVG ? high : na
 
 // Draw FVGs
 if bullFVG
-    box.new(bar_index - 2, bullFVGBottom, bar_index + fvgExtend, bullFVGTop, 
-            border_color=color.new(bullColor, 70), bgcolor=color.new(bullColor, 90), 
-            border_width=1, text="FVG", text_color=color.new(bullColor, 30), text_size=size.tiny)
+    box.new(bar_index - 2, bullFVGBottom, bar_index + fvgExtend, bullFVGTop, border_color=color.new(bullColor, 70), bgcolor=color.new(bullColor, 90), border_width=1, text="FVG", text_color=color.new(bullColor, 30), text_size=size.tiny)
 
 if bearFVG
-    box.new(bar_index - 2, bearFVGBottom, bar_index + fvgExtend, bearFVGTop, 
-            border_color=color.new(bearColor, 70), bgcolor=color.new(bearColor, 90), 
-            border_width=1, text="FVG", text_color=color.new(bearColor, 30), text_size=size.tiny)
+    box.new(bar_index - 2, bearFVGBottom, bar_index + fvgExtend, bearFVGTop, border_color=color.new(bearColor, 70), bgcolor=color.new(bearColor, 90), border_width=1, text="FVG", text_color=color.new(bearColor, 30), text_size=size.tiny)
 
 // ==================== ORDER BLOCK DETECTION ====================
 // Bullish OB: Last bearish candle before bullish displacement
@@ -199,9 +187,7 @@ if detectOB and bullDisplacement and close[1] < open[1]
     bullOBTop := open[1]
     bullOBBottom := close[1]
     bullOBBar := bar_index - 1
-    box.new(bullOBBar, bullOBBottom, bar_index + obExtend, bullOBTop, 
-            border_color=color.new(bullColor, 60), bgcolor=color.new(bullColor, 85), 
-            border_width=2, text="OB", text_color=color.new(bullColor, 20), text_size=size.small)
+    box.new(bullOBBar, bullOBBottom, bar_index + obExtend, bullOBTop, border_color=color.new(bullColor, 60), bgcolor=color.new(bullColor, 85), border_width=2, text="OB", text_color=color.new(bullColor, 20), text_size=size.small)
 
 // Bearish OB: Last bullish candle before bearish displacement
 bearDisplacement = (close < open) and (open - close) > (ta.atr(14) * 1.5)
@@ -213,9 +199,7 @@ if detectOB and bearDisplacement and close[1] > open[1]
     bearOBTop := close[1]
     bearOBBottom := open[1]
     bearOBBar := bar_index - 1
-    box.new(bearOBBar, bearOBBottom, bar_index + obExtend, bearOBTop, 
-            border_color=color.new(bearColor, 60), bgcolor=color.new(bearColor, 85), 
-            border_width=2, text="OB", text_color=color.new(bearColor, 20), text_size=size.small)
+    box.new(bearOBBar, bearOBBottom, bar_index + obExtend, bearOBTop, border_color=color.new(bearColor, 60), bgcolor=color.new(bearColor, 85), border_width=2, text="OB", text_color=color.new(bearColor, 20), text_size=size.small)
 
 // ==================== MARKET STRUCTURE SHIFT (MSS) ====================
 var float lastHigh = na
@@ -234,12 +218,10 @@ bearMSS = detectMSS and not na(lastLow) and close < lastLow and close[1] >= last
 
 // Plot MSS
 if bullMSS
-    label.new(bar_index, low, "MSS ⬆", color=color.new(bullColor, 0), 
-              textcolor=color.white, style=label.style_label_up, size=size.small)
+    label.new(bar_index, low, "MSS ⬆", color=color.new(bullColor, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
 
 if bearMSS
-    label.new(bar_index, high, "MSS ⬇", color=color.new(bearColor, 0), 
-              textcolor=color.white, style=label.style_label_down, size=size.small)
+    label.new(bar_index, high, "MSS ⬇", color=color.new(bearColor, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
 
 // ==================== BULLISH OTE SETUP ====================
 var float bull_RangeLow = na
@@ -378,15 +360,11 @@ bgcolor(bear_SetupActive and bear_InPremium ? color.new(bearColor, 97) : na, tit
 
 // Entry Signals
 if bull_EntrySignal
-    label.new(bar_index, low, "🎯 LONG OTE\n" + str.tostring(close, "#.####"), 
-              color=color.new(bullColor, 0), textcolor=color.white, 
-              style=label.style_label_up, size=size.normal)
+    label.new(bar_index, low, "🎯 LONG OTE\n" + str.tostring(close, "#.####"), color=color.new(bullColor, 0), textcolor=color.white, style=label.style_label_up, size=size.normal)
     alert("LONG OTE Entry at " + str.tostring(close), alert.freq_once_per_bar)
 
 if bear_EntrySignal
-    label.new(bar_index, high, "🎯 SHORT OTE\n" + str.tostring(close, "#.####"), 
-              color=color.new(bearColor, 0), textcolor=color.white, 
-              style=label.style_label_down, size=size.normal)
+    label.new(bar_index, high, "🎯 SHORT OTE\n" + str.tostring(close, "#.####"), color=color.new(bearColor, 0), textcolor=color.white, style=label.style_label_down, size=size.normal)
     alert("SHORT OTE Entry at " + str.tostring(close), alert.freq_once_per_bar)
 
 // ==================== STATUS TABLE ====================
