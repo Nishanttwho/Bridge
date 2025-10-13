@@ -3,8 +3,96 @@
 ## Supported Trading Strategies
 
 This guide covers webhook integration for multiple trading strategies:
-1. **Target Trend Indicator** - Trend-following with custom SL/TP
+1. **ICT OTE (Optimal Trade Entry)** - 62-79% retracement zone with trend confirmation
 2. **Fibonacci 0.705 Retracement** - Retracement trading with precise entry signals
+3. **Target Trend Indicator** - Trend-following with custom SL/TP
+
+---
+
+## ICT OTE (Optimal Trade Entry) Indicator
+
+### Strategy Overview
+**"Buy the best part of a retracement inside a trend - the Optimal Trade Entry zone."**
+
+The OTE indicator implements ICT's concept of entering trades at optimal retracement zones within a trending market. It automatically identifies trends, swing points, and generates high-probability entry signals when price retraces into the OTE zone (62%-79% Fibonacci retracement) and shows confirmation.
+
+**Works for BOTH BUY and SELL**
+
+**For BUY (Uptrend):**
+- **Trend**: Price above EMA or higher highs/higher lows
+- **Swing**: Identifies LOW → HIGH move
+- **OTE Zone**: 62-79% retracement (or narrow 70.5-69%)
+- **Entry**: Candle touches zone, closes bullish (not below zone)
+- **Risk**: SL below entry candle, TP at swing high
+
+**For SELL (Downtrend):**
+- **Trend**: Price below EMA or lower highs/lower lows
+- **Swing**: Identifies HIGH → LOW move
+- **OTE Zone**: 62-79% retracement (or narrow 70.5-69%)
+- **Entry**: Candle touches zone, closes bearish (not above zone)
+- **Risk**: SL above entry candle, TP at swing low
+
+### Webhook Format
+The OTE indicator automatically sends this JSON:
+
+```json
+{
+  "symbol": "{{ticker}}",
+  "type": "BUY",
+  "indicator": "ote",
+  "entry": "{{close}}",
+  "stopLoss": "{{low}}",
+  "takeProfit": "{{high}}"
+}
+```
+
+### Example BUY Signal
+```json
+{
+  "symbol": "EURUSD",
+  "type": "BUY",
+  "indicator": "ote",
+  "entry": "1.0910",
+  "stopLoss": "1.0900",
+  "takeProfit": "1.0950"
+}
+```
+
+### Example SELL Signal
+```json
+{
+  "symbol": "GBPUSD",
+  "type": "SELL",
+  "indicator": "ote",
+  "entry": "1.2650",
+  "stopLoss": "1.2665",
+  "takeProfit": "1.2600"
+}
+```
+
+**Note**: Lot size is calculated automatically by the backend based on your risk settings.
+
+### Setup Instructions
+1. Copy the Pine Script from `tradingview-strategies/ote_indicator.pine`
+2. Add it to TradingView Pine Editor
+3. Configure settings:
+   - Webhook URL
+   - OTE zone (standard 62-79% or narrow 70.5-69%)
+   - EMA length and swing lookback
+   - Visual preferences
+4. Create alert with "Any alert() function call" condition
+5. Enable "Webhook URL" and "Once Per Bar Close"
+
+📖 **Full Guide**: See `tradingview-strategies/OTE_STRATEGY_GUIDE.md` for complete setup instructions
+
+### Key Features
+- ✅ Automatic trend detection via EMA
+- ✅ Swing point identification
+- ✅ OTE zone visualization (62-79% or 70.5-69%)
+- ✅ Entry confirmation logic
+- ✅ Visual signals and info table
+- ✅ Automatic zone cleanup when setups invalidate
+- ✅ Webhook integration with MT5 (position sizing handled server-side)
 
 ---
 

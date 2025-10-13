@@ -1,0 +1,257 @@
+//@version=5
+indicator("ICT OTE - Optimal Trade Entry", overlay=true, max_boxes_count=500, max_lines_count=500)
+
+// ===========================
+// INPUT SETTINGS
+// ===========================
+
+// Webhook Settings
+webhookUrl = input.string("", title="Webhook URL", group="Webhook Settings")
+
+// OTE Zone Settings
+useNarrowZone = input.bool(false, title="Use Narrow Zone (70.5-69%)", group="OTE Settings")
+upperOTE = useNarrowZone ? 0.705 : 0.79
+lowerOTE = useNarrowZone ? 0.69 : 0.62
+
+// Trend Settings
+emaLength = input.int(50, title="EMA Length for Trend", minval=1, group="Trend Settings")
+swingLookback = input.int(10, title="Swing Detection Lookback", minval=5, group="Trend Settings")
+
+// Visual Settings
+showOTEZones = input.bool(true, title="Show OTE Zones", group="Visual Settings")
+showSwingPoints = input.bool(true, title="Show Swing Points", group="Visual Settings")
+zoneTransparency = input.int(90, title="Zone Transparency", minval=0, maxval=95, group="Visual Settings")
+
+// Alert Settings
+enableAlerts = input.bool(true, title="Enable Alerts", group="Alert Settings")
+
+// ===========================
+// TREND DETECTION
+// ===========================
+
+ema = ta.ema(close, emaLength)
+uptrend = close > ema
+downtrend = close < ema
+
+plot(ema, "EMA Trend", color=uptrend ? color.green : color.red, linewidth=2)
+
+// ===========================
+// SWING POINT DETECTION
+// ===========================
+
+// Function to detect swing highs and lows
+isSwingHigh = ta.pivothigh(high, swingLookback, swingLookback)
+isSwingLow = ta.pivotlow(low, swingLookback, swingLookback)
+
+// Variables to store swing points
+var float swingLow = na
+var float swingHigh = na
+var int swingLowBar = na
+var int swingHighBar = na
+
+// Update swing points
+if not na(isSwingLow)
+    swingLow := low[swingLookback]
+    swingLowBar := bar_index - swingLookback
+
+if not na(isSwingHigh)
+    swingHigh := high[swingLookback]
+    swingHighBar := bar_index - swingLookback
+
+// Plot swing points
+plotshape(showSwingPoints and not na(isSwingLow), "Swing Low", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(showSwingPoints and not na(isSwingHigh), "Swing High", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// ===========================
+// OTE ZONE CALCULATION
+// ===========================
+
+// For UPTREND: Calculate OTE zone from swing low to swing high
+var box uptrendOTEBox = na
+
+// For DOWNTREND: Calculate OTE zone from swing high to swing low
+var box downtrendOTEBox = na
+
+// Calculate OTE levels for uptrend
+float uptrendOTEUpperLevel = na
+float uptrendOTELowerLevel = na
+bool validUptrendSetup = false
+
+if not na(swingLow) and not na(swingHigh) and swingLowBar < swingHighBar and uptrend
+    swingRange = swingHigh - swingLow
+    uptrendOTEUpperLevel := swingHigh - (swingRange * lowerOTE)
+    uptrendOTELowerLevel := swingHigh - (swingRange * upperOTE)
+    validUptrendSetup := true
+    
+    if showOTEZones
+        // Delete old box before creating new one
+        if not na(uptrendOTEBox)
+            box.delete(uptrendOTEBox)
+        uptrendOTEBox := box.new(bar_index - 1, uptrendOTEUpperLevel, bar_index + 50, uptrendOTELowerLevel, 
+                                 border_color=color.green, bgcolor=color.new(color.green, zoneTransparency), 
+                                 border_width=1, extend=extend.right)
+else
+    // Clean up box if setup is no longer valid
+    if not na(uptrendOTEBox) and showOTEZones
+        box.delete(uptrendOTEBox)
+        uptrendOTEBox := na
+
+// Calculate OTE levels for downtrend
+float downtrendOTEUpperLevel = na
+float downtrendOTELowerLevel = na
+bool validDowntrendSetup = false
+
+if not na(swingLow) and not na(swingHigh) and swingHighBar < swingLowBar and downtrend
+    swingRange = swingHigh - swingLow
+    downtrendOTEUpperLevel := swingLow + (swingRange * upperOTE)
+    downtrendOTELowerLevel := swingLow + (swingRange * lowerOTE)
+    validDowntrendSetup := true
+    
+    if showOTEZones
+        // Delete old box before creating new one
+        if not na(downtrendOTEBox)
+            box.delete(downtrendOTEBox)
+        downtrendOTEBox := box.new(bar_index - 1, downtrendOTEUpperLevel, bar_index + 50, downtrendOTELowerLevel, 
+                                   border_color=color.red, bgcolor=color.new(color.red, zoneTransparency), 
+                                   border_width=1, extend=extend.right)
+else
+    // Clean up box if setup is no longer valid
+    if not na(downtrendOTEBox) and showOTEZones
+        box.delete(downtrendOTEBox)
+        downtrendOTEBox := na
+
+// ===========================
+// ENTRY SIGNAL LOGIC
+// ===========================
+
+// BUY Signal: Price retraces into uptrend OTE zone and closes bullish (above zone bottom)
+bool buySignal = false
+float buyEntry = na
+float buySL = na
+float buyTP = na
+
+if validUptrendSetup and not na(uptrendOTEUpperLevel) and not na(uptrendOTELowerLevel)
+    touchedZone = low <= uptrendOTEUpperLevel and high >= uptrendOTELowerLevel
+    closedBullish = close > open
+    closedInZoneOrAbove = close >= uptrendOTELowerLevel
+    
+    if touchedZone and closedBullish and closedInZoneOrAbove
+        buySignal := true
+        buyEntry := close
+        buySL := low
+        buyTP := swingHigh
+
+// SELL Signal: Price retraces into downtrend OTE zone and closes bearish (below zone top)
+bool sellSignal = false
+float sellEntry = na
+float sellSL = na
+float sellTP = na
+
+if validDowntrendSetup and not na(downtrendOTEUpperLevel) and not na(downtrendOTELowerLevel)
+    touchedZone = high >= downtrendOTELowerLevel and low <= downtrendOTEUpperLevel
+    closedBearish = close < open
+    closedInZoneOrBelow = close <= downtrendOTEUpperLevel
+    
+    if touchedZone and closedBearish and closedInZoneOrBelow
+        sellSignal := true
+        sellEntry := close
+        sellSL := high
+        sellTP := swingLow
+
+// ===========================
+// VISUAL SIGNALS
+// ===========================
+
+plotshape(buySignal, "BUY Signal", shape.labelup, location.belowbar, color.new(color.green, 0), 
+          text="BUY\nOTE", textcolor=color.white, size=size.normal)
+plotshape(sellSignal, "SELL Signal", shape.labeldown, location.abovebar, color.new(color.red, 0), 
+          text="SELL\nOTE", textcolor=color.white, size=size.normal)
+
+// Plot entry, SL, and TP levels
+var line buyEntryLine = na
+var line buySLLine = na
+var line buyTPLine = na
+var line sellEntryLine = na
+var line sellSLLine = na
+var line sellTPLine = na
+
+if buySignal
+    // Delete old lines
+    if not na(buyEntryLine)
+        line.delete(buyEntryLine)
+        line.delete(buySLLine)
+        line.delete(buyTPLine)
+    
+    buyEntryLine := line.new(bar_index, buyEntry, bar_index + 10, buyEntry, color=color.blue, width=2, style=line.style_solid)
+    buySLLine := line.new(bar_index, buySL, bar_index + 10, buySL, color=color.red, width=1, style=line.style_dashed)
+    buyTPLine := line.new(bar_index, buyTP, bar_index + 10, buyTP, color=color.green, width=1, style=line.style_dashed)
+
+if sellSignal
+    // Delete old lines
+    if not na(sellEntryLine)
+        line.delete(sellEntryLine)
+        line.delete(sellSLLine)
+        line.delete(sellTPLine)
+    
+    sellEntryLine := line.new(bar_index, sellEntry, bar_index + 10, sellEntry, color=color.blue, width=2, style=line.style_solid)
+    sellSLLine := line.new(bar_index, sellSL, bar_index + 10, sellSL, color=color.red, width=1, style=line.style_dashed)
+    sellTPLine := line.new(bar_index, sellTP, bar_index + 10, sellTP, color=color.green, width=1, style=line.style_dashed)
+
+// ===========================
+// WEBHOOK ALERTS
+// ===========================
+
+// BUY Alert - sends only entry, stopLoss, takeProfit (backend calculates lot size)
+if buySignal and enableAlerts
+    alertMessage = '{\n' +
+         '  "symbol": "' + syminfo.ticker + '",\n' +
+         '  "type": "BUY",\n' +
+         '  "indicator": "ote",\n' +
+         '  "entry": "' + str.tostring(buyEntry) + '",\n' +
+         '  "stopLoss": "' + str.tostring(buySL) + '",\n' +
+         '  "takeProfit": "' + str.tostring(buyTP) + '"\n' +
+         '}'
+    
+    alert(alertMessage, alert.freq_once_per_bar_close)
+
+// SELL Alert - sends only entry, stopLoss, takeProfit (backend calculates lot size)
+if sellSignal and enableAlerts
+    alertMessage = '{\n' +
+         '  "symbol": "' + syminfo.ticker + '",\n' +
+         '  "type": "SELL",\n' +
+         '  "indicator": "ote",\n' +
+         '  "entry": "' + str.tostring(sellEntry) + '",\n' +
+         '  "stopLoss": "' + str.tostring(sellSL) + '",\n' +
+         '  "takeProfit": "' + str.tostring(sellTP) + '"\n' +
+         '}'
+    
+    alert(alertMessage, alert.freq_once_per_bar_close)
+
+// ===========================
+// INFORMATION TABLE
+// ===========================
+
+var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.gray, 90), 
+                                border_width=1, border_color=color.gray)
+
+if barstate.islast
+    table.cell(infoTable, 0, 0, "OTE Indicator", text_color=color.white, text_size=size.normal)
+    table.cell(infoTable, 1, 0, "", text_color=color.white)
+    
+    table.cell(infoTable, 0, 1, "Trend", text_color=color.white)
+    table.cell(infoTable, 1, 1, uptrend ? "UPTREND" : downtrend ? "DOWNTREND" : "NEUTRAL", 
+               text_color=uptrend ? color.green : downtrend ? color.red : color.gray)
+    
+    table.cell(infoTable, 0, 2, "OTE Zone", text_color=color.white)
+    table.cell(infoTable, 1, 2, str.tostring(math.round(lowerOTE * 100)) + "%-" + str.tostring(math.round(upperOTE * 100)) + "%", 
+               text_color=color.yellow)
+    
+    table.cell(infoTable, 0, 3, "Swing Low", text_color=color.white)
+    table.cell(infoTable, 1, 3, not na(swingLow) ? str.tostring(swingLow, format.mintick) : "N/A", text_color=color.green)
+    
+    table.cell(infoTable, 0, 4, "Swing High", text_color=color.white)
+    table.cell(infoTable, 1, 4, not na(swingHigh) ? str.tostring(swingHigh, format.mintick) : "N/A", text_color=color.red)
+    
+    table.cell(infoTable, 0, 5, "Alerts", text_color=color.white)
+    table.cell(infoTable, 1, 5, enableAlerts ? "ENABLED" : "DISABLED", 
+               text_color=enableAlerts ? color.green : color.red)
