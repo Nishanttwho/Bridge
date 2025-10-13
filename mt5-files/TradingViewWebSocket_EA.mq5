@@ -173,9 +173,6 @@ void ConnectWebSocket()
       return;
    }
    
-   // Set socket timeout (all parameters must be uint)
-   SocketTimeouts(wsHandle, 5000, 5000, 5000);
-   
    // Connect to server
    // Port 443 automatically enables TLS
    if(!SocketConnect(wsHandle, wsHost, wsPort, 5000))
