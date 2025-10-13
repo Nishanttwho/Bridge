@@ -958,6 +958,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Handle ping frames from MT5 (respond with pong)
+    ws.on('ping', () => {
+      console.log('[MT5-WS] Received ping, sending pong');
+      ws.pong();
+    });
+
+    // Handle pong frames from MT5
+    ws.on('pong', () => {
+      console.log('[MT5-WS] Received pong from MT5');
+    });
+
     ws.on('close', () => {
       console.log('[MT5-WS] MT5 client disconnected');
       mt5WsClients.delete(ws);
