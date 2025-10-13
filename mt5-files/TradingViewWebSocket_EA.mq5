@@ -82,6 +82,10 @@ void OnTimer()
    if(isConnected && wsHandle >= 0)
    {
       CheckForMessages();
+      
+      // Send account info and positions to server
+      SendAccountInfo();
+      SendPositions();
    }
 }
 
@@ -766,6 +770,81 @@ void SendReport(string commandId, bool success, string orderId, string positionI
    {
       Print("[REPORT ERROR] Failed to send");
    }
+}
+
+//+------------------------------------------------------------------+
+//| Send account info to server                                      |
+//+------------------------------------------------------------------+
+void SendAccountInfo()
+{
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double margin = AccountInfoDouble(ACCOUNT_MARGIN);
+   double freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   double marginLevel = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
+   double profit = AccountInfoDouble(ACCOUNT_PROFIT);
+   
+   string json = "{";
+   json += "\"type\":\"ACCOUNT_INFO\",";
+   json += "\"balance\":" + DoubleToString(balance, 2) + ",";
+   json += "\"equity\":" + DoubleToString(equity, 2) + ",";
+   json += "\"margin\":" + DoubleToString(margin, 2) + ",";
+   json += "\"freeMargin\":" + DoubleToString(freeMargin, 2) + ",";
+   json += "\"marginLevel\":" + DoubleToString(marginLevel, 2) + ",";
+   json += "\"profit\":" + DoubleToString(profit, 2);
+   json += "}";
+   
+   SendWebSocketMessage(json);
+}
+
+//+------------------------------------------------------------------+
+//| Send open positions to server                                    |
+//+------------------------------------------------------------------+
+void SendPositions()
+{
+   string json = "{\"type\":\"POSITIONS\",\"positions\":[";
+   
+   int totalPositions = PositionsTotal();
+   for(int i = 0; i < totalPositions; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0)
+      {
+         if(i > 0) json += ",";
+         
+         string symbol = PositionGetString(POSITION_SYMBOL);
+         long posType = PositionGetInteger(POSITION_TYPE);
+         double volume = PositionGetDouble(POSITION_VOLUME);
+         double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+         double currentPrice = (posType == POSITION_TYPE_BUY) ? 
+            SymbolInfoDouble(symbol, SYMBOL_BID) : 
+            SymbolInfoDouble(symbol, SYMBOL_ASK);
+         double sl = PositionGetDouble(POSITION_SL);
+         double tp = PositionGetDouble(POSITION_TP);
+         double posProfit = PositionGetDouble(POSITION_PROFIT);
+         double swap = PositionGetDouble(POSITION_SWAP);
+         double commission = PositionGetDouble(POSITION_COMMISSION);
+         datetime openTime = (datetime)PositionGetInteger(POSITION_TIME);
+         
+         json += "{";
+         json += "\"ticket\":\"" + IntegerToString(ticket) + "\",";
+         json += "\"symbol\":\"" + symbol + "\",";
+         json += "\"type\":\"" + ((posType == POSITION_TYPE_BUY) ? "BUY" : "SELL") + "\",";
+         json += "\"volume\":" + DoubleToString(volume, 2) + ",";
+         json += "\"openPrice\":" + DoubleToString(openPrice, 5) + ",";
+         json += "\"currentPrice\":" + DoubleToString(currentPrice, 5) + ",";
+         json += "\"stopLoss\":" + DoubleToString(sl, 5) + ",";
+         json += "\"takeProfit\":" + DoubleToString(tp, 5) + ",";
+         json += "\"profit\":" + DoubleToString(posProfit, 2) + ",";
+         json += "\"swap\":" + DoubleToString(swap, 2) + ",";
+         json += "\"commission\":" + DoubleToString(commission, 2) + ",";
+         json += "\"openTime\":\"" + TimeToString(openTime, TIME_DATE|TIME_SECONDS) + "\"";
+         json += "}";
+      }
+   }
+   
+   json += "]}";
+   SendWebSocketMessage(json);
 }
 
 //+------------------------------------------------------------------+
