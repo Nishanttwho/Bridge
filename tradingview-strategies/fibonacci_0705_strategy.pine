@@ -1,15 +1,17 @@
 //@version=5
-strategy("Fibonacci 0.705 Retracement Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+strategy("Fibonacci 0.705 Liquidity Grab Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
 
 // ============================================================================
-// STRATEGY LOGIC:
-// 1. In uptrend: Place Fibonacci from swing low to swing high
-// 2. Wait for price to tap 0.705 Fibonacci level
-// 3. Entry condition: Candle that taps 0.705 must:
-//    - NOT have body close below 0.705 (body stays above)
-//    - Close BULLISH (green candle) during retracement
-// 4. Stop Loss: Below the candle that tapped 0.705
-// 5. Take Profit: The previous swing high
+// STRATEGY LOGIC (LIQUIDITY GRAB):
+// 1. Track previous swing high
+// 2. NEW swing must BREAK previous high (liquidity grab)
+// 3. After liquidity grab: Place Fibonacci from swing low to NEW high
+// 4. Wait for price to retrace and tap 0.705 Fibonacci level
+// 5. Entry condition: Candle that taps 0.705 must:
+//    - Close BULLISH (green candle)
+//    - Body close ABOVE 0.705 level
+// 6. Stop Loss: Below the entry candle
+// 7. Take Profit: The NEW swing high (liquidity grab high)
 // ============================================================================
 
 // Input Parameters
@@ -18,33 +20,46 @@ fibLevel = input.float(0.705, "Fibonacci Level", minval=0.5, maxval=0.9, step=0.
 webhookUrl = input.string("https://your-replit-app.replit.dev/api/webhook", "Webhook URL")
 apiSecret = input.string("your-secret-key", "API Secret")
 
-// Detect Swing High and Low
-var float swingHigh = na
+// Track swing highs and lows
+var float previousSwingHigh = na
+var float currentSwingHigh = na
 var float swingLow = na
-var int swingHighBar = na
+var int currentSwingHighBar = na
 var int swingLowBar = na
+var bool liquidityGrabDetected = false
+var bool readyForRetracement = false
 
 // Current high/low detection
 highestHigh = ta.highest(high, lookbackPeriod)
 lowestLow = ta.lowest(low, lookbackPeriod)
 
-// Update swing points when new extremes are found
-if high >= highestHigh
-    swingHigh := high
-    swingHighBar := bar_index
+// Detect NEW swing high
+if high >= highestHigh and high > currentSwingHigh
+    // Check if this new high BREAKS the previous swing high (liquidity grab)
+    if not na(currentSwingHigh) and high > currentSwingHigh
+        previousSwingHigh := currentSwingHigh  // Store old high
+        currentSwingHigh := high  // Update to new high
+        currentSwingHighBar := bar_index
+        liquidityGrabDetected := true  // Liquidity grab confirmed!
+        readyForRetracement := true
+    else if na(currentSwingHigh)
+        // First swing high detected
+        currentSwingHigh := high
+        currentSwingHighBar := bar_index
+        liquidityGrabDetected := false
 
-if low <= lowestLow
+// Detect swing low (must come AFTER liquidity grab)
+if low <= lowestLow and liquidityGrabDetected
     swingLow := low
     swingLowBar := bar_index
 
-// Determine trend (uptrend if low was formed before high)
-isUptrend = not na(swingHigh) and not na(swingLow) and swingLowBar < swingHighBar
+// Determine if we have valid setup (liquidity grab occurred, then low formed)
+validSetup = liquidityGrabDetected and not na(swingLow) and not na(currentSwingHigh) and swingLowBar < currentSwingHighBar
 
-// Calculate Fibonacci 0.705 level (from low to high in uptrend)
-fib705Level = na(swingLow) or na(swingHigh) ? na : swingLow + (swingHigh - swingLow) * fibLevel
+// Calculate Fibonacci 0.705 level (from low to liquidity grab high)
+fib705Level = na(swingLow) or na(currentSwingHigh) ? na : swingLow + (currentSwingHigh - swingLow) * fibLevel
 
 // Entry Conditions
-var bool waitingForRetracement = false
 var float entryLevel = na
 var float slLevel = na
 var float tpLevel = na
@@ -58,14 +73,14 @@ isBullishClose = close > open
 // Check if candle body stayed above 0.705 level
 bodyAbove705 = not na(fib705Level) and close > fib705Level
 
-// LONG Entry Signal
-longCondition = isUptrend and priceTapped705 and isBullishClose and bodyAbove705 and strategy.position_size == 0
+// LONG Entry Signal (only after liquidity grab)
+longCondition = validSetup and readyForRetracement and priceTapped705 and isBullishClose and bodyAbove705 and strategy.position_size == 0
 
 // Execute Long Trade
 if longCondition
     entryLevel := close
     slLevel := low  // SL below the candle that tapped 0.705
-    tpLevel := swingHigh  // TP at previous high
+    tpLevel := currentSwingHigh  // TP at liquidity grab high
     
     // Calculate values for webhook
     slPips = math.abs(entryLevel - slLevel)
@@ -77,23 +92,27 @@ if longCondition
     
     // Send webhook to MT5
     alert('{"symbol":"' + syminfo.ticker + '","type":"BUY","indicator":"fibonacci_705","entry":"' + str.tostring(entryLevel) + '","stopLoss":"' + str.tostring(slLevel) + '","takeProfit":"' + str.tostring(tpLevel) + '"}', alert.freq_once_per_bar)
+    
+    // Reset flags after entry
+    readyForRetracement := false
+    liquidityGrabDetected := false
 
 // Visual Elements
-plot(swingHigh, "Swing High", color=color.green, linewidth=2, style=plot.style_circles)
+plotshape(liquidityGrabDetected and bar_index == currentSwingHighBar, "Liquidity Grab", shape.triangleup, location.abovebar, color.new(color.yellow, 0), size=size.small, text="LIQ GRAB")
+plot(currentSwingHigh, "Current High (Liquidity Grab)", color=color.green, linewidth=2, style=plot.style_circles)
+plot(previousSwingHigh, "Previous High", color=color.orange, linewidth=1, style=plot.style_circles)
 plot(swingLow, "Swing Low", color=color.red, linewidth=2, style=plot.style_circles)
 plot(fib705Level, "Fib 0.705", color=color.blue, linewidth=2, style=plot.style_line)
 
-// Draw Fibonacci levels
-var line fibLine = na
-if isUptrend and not na(swingLow) and not na(swingHigh)
-    if not na(fibLine)
-        line.delete(fibLine)
-    fibLine := line.new(swingLowBar, swingLow, bar_index, fib705Level, color=color.blue, width=1)
-
 // Labels for entry
 if longCondition
-    label.new(bar_index, low, "LONG\nEntry: " + str.tostring(entryLevel, "#.##") + "\nSL: " + str.tostring(slLevel, "#.##") + "\nTP: " + str.tostring(tpLevel, "#.##"), 
+    label.new(bar_index, low, "LONG (LIQ GRAB)\nEntry: " + str.tostring(entryLevel, "#.####") + "\nSL: " + str.tostring(slLevel, "#.####") + "\nTP: " + str.tostring(tpLevel, "#.####"), 
               color=color.green, textcolor=color.white, style=label.style_label_up, size=size.small)
 
-// Background color for uptrend
-bgcolor(isUptrend ? color.new(color.green, 95) : na, title="Uptrend Background")
+// Background color for valid setup (after liquidity grab)
+bgcolor(validSetup and readyForRetracement ? color.new(color.green, 95) : na, title="Valid Setup (After Liquidity Grab)")
+
+// Draw liquidity grab marker
+if liquidityGrabDetected and bar_index == currentSwingHighBar
+    line.new(currentSwingHighBar, currentSwingHigh, currentSwingHighBar + 5, currentSwingHigh, color=color.yellow, width=2, style=line.style_dashed)
+    label.new(currentSwingHighBar, currentSwingHigh, "LIQUIDITY GRAB ⚡", color=color.yellow, textcolor=color.black, style=label.style_label_down, size=size.normal)

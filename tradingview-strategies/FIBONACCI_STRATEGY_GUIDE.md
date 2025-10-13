@@ -2,17 +2,22 @@
 
 ## Strategy Overview
 
-This strategy trades Fibonacci retracements in an uptrend:
+This strategy trades Fibonacci retracements **ONLY AFTER LIQUIDITY GRABS** in uptrends:
 
-1. **Trend Detection**: Identifies uptrends using swing high/low analysis
-2. **Fibonacci Placement**: Places Fibonacci from swing low to swing high
-3. **Entry Signal**: Waits for 0.705 Fibonacci level to be tapped
-4. **Confirmation**: Entry candle must:
+### The Core Logic (Simple):
+**"Only trade the retracement after a swing that breaks previous highs (takes liquidity). Then use the 0.705 tap entry."**
+
+### Step-by-Step:
+1. **Liquidity Grab Detection**: Wait for price to BREAK the previous swing high (liquidity grab ⚡)
+2. **Swing Formation**: After liquidity grab, wait for swing low to form
+3. **Fibonacci Placement**: Place Fib from swing low to the NEW high (liquidity grab high)
+4. **Retracement Wait**: Wait for price to pull back and tap 0.705 level
+5. **Entry Confirmation**: Candle that taps 0.705 must:
    - Touch the 0.705 level
-   - Close bullish (green)
+   - Close BULLISH (green candle)
    - Body must close ABOVE 0.705 level
-5. **Stop Loss**: Below the entry candle's low
-6. **Take Profit**: At the previous swing high
+6. **Stop Loss**: Below the entry candle's low
+7. **Take Profit**: At the liquidity grab high (the high that broke previous high)
 
 ## Installation
 
@@ -66,14 +71,27 @@ The strategy automatically sends this JSON format:
 
 ## How It Works
 
+### Liquidity Grab Logic Explained
+
+**What is a Liquidity Grab?**
+A liquidity grab occurs when price breaks above a previous swing high, taking out stop losses and liquidity at that level. This is a key institutional behavior - they grab liquidity before reversing.
+
+**Why Only Trade After Liquidity Grabs?**
+- Higher probability setups
+- Confirms market structure shift
+- Liquidity has been taken, now ready for reversal/continuation
+- Filters out weak setups
+
 ### Entry Logic
 
-**LONG Entry Conditions:**
-1. Market is in an uptrend (swing low formed before swing high)
-2. Price retraces to 0.705 Fibonacci level
-3. Candle touches 0.705 level (wicks can go through)
-4. Candle closes BULLISH (close > open)
-5. Candle body closes ABOVE 0.705 (no body close below the level)
+**LONG Entry Conditions (All Must Be Met):**
+1. **Liquidity Grab**: New swing high BREAKS previous swing high ⚡
+2. **Swing Low Forms**: After liquidity grab, a swing low must form
+3. **Valid Setup**: Swing low must come BEFORE the liquidity grab high
+4. **Price Retraces**: Price pulls back to 0.705 Fibonacci level
+5. **Candle Touches 0.705**: Entry candle low/wick touches the level
+6. **Bullish Close**: Candle closes BULLISH (close > open)
+7. **Body Above 0.705**: Candle body closes ABOVE 0.705 level
 
 ### Risk Management
 
@@ -86,11 +104,14 @@ The strategy automatically sends this JSON format:
 
 ### Visual Indicators on Chart
 
-- 🟢 **Green Circle**: Swing High
-- 🔴 **Red Circle**: Swing Low
+- ⚡ **Yellow Triangle Up**: Liquidity Grab detected (break of previous high)
+- 🟢 **Green Circle**: Current Swing High (Liquidity Grab High)
+- 🟠 **Orange Circle**: Previous Swing High
+- 🔴 **Red Circle**: Swing Low (after liquidity grab)
 - 🔵 **Blue Line**: Fibonacci 0.705 level
-- 🟩 **Green Background**: Uptrend zone
-- 📍 **Green Label**: Entry signal with prices
+- 🟩 **Green Background**: Valid setup zone (after liquidity grab)
+- 📍 **Green Label**: Entry signal with "LIQ GRAB" confirmation
+- ⚡ **Yellow Dashed Line**: Marks the liquidity grab level
 
 ## Settings Customization
 
@@ -133,29 +154,54 @@ The strategy automatically sends this JSON format:
 
 ## Example Scenarios
 
-### Valid Entry Example
+### Valid Entry Example (WITH Liquidity Grab)
 ```
-Uptrend detected:
-- Swing Low: 1.0800 (bar 100)
-- Swing High: 1.0950 (bar 150)
-- Fib 0.705: 1.0905
+Previous swing high: 1.0900 (bar 50)
 
-Entry Signal (bar 160):
-- Low: 1.0900 (touched 0.705 ✓)
-- Close: 1.0910 (above 0.705 ✓)
+LIQUIDITY GRAB ⚡ (bar 100):
+- Price breaks previous high
+- New swing high: 1.0950 (BREAKS 1.0900 ✓)
+- Liquidity grab confirmed!
+
+Swing Low forms (bar 120):
+- Swing Low: 1.0850
+- Forms AFTER liquidity grab ✓
+
+Fibonacci setup:
+- From: 1.0850 (swing low)
+- To: 1.0950 (liquidity grab high)
+- Fib 0.705: 1.0920
+
+Entry Signal (bar 140):
+- Low: 1.0918 (touched 0.705 ✓)
+- Close: 1.0925 (above 0.705 ✓)
 - Bullish: close > open ✓
+- Liquidity grab occurred ✓
 
 Trade:
-- Entry: 1.0910
-- SL: 1.0900
-- TP: 1.0950
+- Entry: 1.0925
+- SL: 1.0918
+- TP: 1.0950 (liquidity grab high)
 ```
 
-### Invalid Entry Example
+### Invalid Entry Example (NO Liquidity Grab)
 ```
-Candle touches 0.705 but:
+Scenario: New high does NOT break previous high
+- Previous swing high: 1.0950
+- New swing high: 1.0930 (LOWER than previous ✗)
+- Result: No liquidity grab, no setup
+- Strategy waits for valid liquidity grab
+
+Even if price taps 0.705:
+- No entry because liquidity grab requirement not met ✗
+```
+
+### Invalid Entry Example (Wrong Candle)
+```
+Valid liquidity grab exists BUT:
+- Candle touches 0.705
 - Body closes BELOW 0.705 ✗
-- Result: No entry (waiting for better setup)
+- Result: No entry (waiting for bullish close above 0.705)
 ```
 
 ## Integration with Your MT5 System
