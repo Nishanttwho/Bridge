@@ -1,5 +1,59 @@
 # TradingView Webhook Configuration Guide
 
+## Supported Trading Strategies
+
+This guide covers webhook integration for multiple trading strategies:
+1. **Target Trend Indicator** - Trend-following with custom SL/TP
+2. **Fibonacci 0.705 Retracement** - Retracement trading with precise entry signals
+
+---
+
+## Fibonacci 0.705 Retracement Strategy
+
+### Strategy Overview
+Trades Fibonacci retracements in uptrends:
+- Detects swing highs and lows
+- Waits for 0.705 Fib level retracement
+- Enters when price bounces (bullish candle at level)
+- SL below entry candle, TP at swing high
+
+### Webhook Format
+The Fibonacci strategy automatically sends this JSON:
+
+```json
+{
+  "symbol": "{{ticker}}",
+  "type": "BUY",
+  "indicator": "fibonacci_705",
+  "entry": "{{close}}",
+  "stopLoss": "{{low}}",
+  "takeProfit": "{{high}}"
+}
+```
+
+### Example BUY Signal
+```json
+{
+  "symbol": "EURUSD",
+  "type": "BUY",
+  "indicator": "fibonacci_705",
+  "entry": "1.0910",
+  "stopLoss": "1.0900",
+  "takeProfit": "1.0950"
+}
+```
+
+### Setup Instructions
+1. Copy the Pine Script from `tradingview-strategies/fibonacci_0705_strategy.pine`
+2. Add it to TradingView Pine Editor
+3. Configure webhook URL and API secret in strategy settings
+4. Create alert with "Any alert() function call" condition
+5. Enable "Webhook URL" and "Once Per Bar Close"
+
+📖 **Full Guide**: See `tradingview-strategies/FIBONACCI_STRATEGY_GUIDE.md` for complete setup instructions
+
+---
+
 ## Target Trend Indicator Webhook Format
 
 ### Required Alert Message Format
