@@ -1,0 +1,330 @@
+//@version=5
+strategy("ICT Optimal Trade Entry (OTE) Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+
+// ============================================================================
+// ICT OTE (OPTIMAL TRADE ENTRY) STRATEGY
+// 
+// Based on Inner Circle Trader's methodology:
+// - OTE is a Fibonacci retracement-based strategy for trend continuation
+// - Works in trending markets (bullish or bearish)
+// - Entry at optimal retracement levels (0.62-0.79)
+// - Primary OTE level: 0.79 (most precise entry)
+//
+// BULLISH OTE:
+//   1. Identify ICT Dealing Range (Low → High in uptrend)
+//   2. Apply Fibonacci from LOW to HIGH
+//   3. Wait for price to retrace into OTE zone (0.62-0.79)
+//   4. Enter on bullish confirmation/rejection at OTE
+//   5. SL below entry | TP at High or extension targets
+//
+// BEARISH OTE:
+//   1. Identify ICT Dealing Range (High → Low in downtrend)
+//   2. Apply Fibonacci from HIGH to LOW
+//   3. Wait for price to rally into OTE zone (0.62-0.79)
+//   4. Enter on bearish confirmation/rejection at OTE
+//   5. SL above entry | TP at Low or extension targets
+// ============================================================================
+
+// ==================== INPUTS ====================
+pivotLength = input.int(10, "Pivot Length (Dealing Range)", minval=5, maxval=30, group="Settings")
+showAllLevels = input.bool(true, "Show All Fibonacci Levels", group="Visuals")
+showDealingRange = input.bool(true, "Show Dealing Range", group="Visuals")
+trendMA = input.int(50, "Trend Filter MA", minval=20, maxval=200, group="Trend Filter")
+useConfirmation = input.bool(true, "Require Bullish/Bearish Candle Confirmation", group="Entry")
+webhookUrl = input.string("https://your-app.replit.dev/api/webhook", "Webhook URL", group="Webhook")
+
+// ICT Fibonacci Levels (as per ICT methodology)
+fib_0 = 0.0        // First Profit Scale
+fib_eq = 0.5       // Equilibrium
+fib_ote1 = 0.62    // OTE Level 1 (start of OTE zone)
+fib_ote2 = 0.705   // OTE Level 2
+fib_ote = 0.79     // Optimal Trade Entry (primary level)
+fib_100 = 1.0      // 100% retracement
+fib_t1 = -0.5      // Target 1
+fib_t2 = -1.0      // Target 2
+fib_sym = -2.0     // Symmetrical Price Target
+
+// ==================== TREND FILTER ====================
+ma = ta.ema(close, trendMA)
+bullishTrend = close > ma and ma > ma[10]
+bearishTrend = close < ma and ma < ma[10]
+
+// ==================== PIVOT DETECTION ====================
+pivotHigh = ta.pivothigh(high, pivotLength, pivotLength)
+pivotLow = ta.pivotlow(low, pivotLength, pivotLength)
+
+// ==================== BULLISH OTE SETUP ====================
+var float bull_DealingRangeLow = na
+var int bull_DealingRangeLowBar = na
+var float bull_DealingRangeHigh = na
+var int bull_DealingRangeHighBar = na
+var bool bull_SetupActive = false
+var bool bull_SetupJustActivated = false
+
+// Step 1: Identify dealing range LOW (in bullish trend)
+if not na(pivotLow) and na(bull_DealingRangeLow)
+    bull_DealingRangeLow := pivotLow[pivotLength]
+    bull_DealingRangeLowBar := bar_index - pivotLength
+
+// Step 2: After low, identify dealing range HIGH
+if not na(bull_DealingRangeLow) and na(bull_DealingRangeHigh) and not na(pivotHigh)
+    if pivotHigh[pivotLength] > bull_DealingRangeLow
+        bull_DealingRangeHigh := pivotHigh[pivotLength]
+        bull_DealingRangeHighBar := bar_index - pivotLength
+        bull_SetupActive := true
+        bull_SetupJustActivated := true
+    else
+        bull_SetupJustActivated := false
+else
+    bull_SetupJustActivated := false
+
+// Calculate Bullish OTE Fibonacci Levels
+float bull_Fib_0 = na
+float bull_Fib_Eq = na
+float bull_Fib_OTE1 = na
+float bull_Fib_OTE2 = na
+float bull_Fib_OTE = na
+float bull_Fib_100 = na
+float bull_Target1 = na
+float bull_Target2 = na
+float bull_TargetSym = na
+
+if bull_SetupActive and not na(bull_DealingRangeLow) and not na(bull_DealingRangeHigh)
+    float range_bull = bull_DealingRangeHigh - bull_DealingRangeLow
+    
+    // Fibonacci levels (from LOW to HIGH, retracement)
+    bull_Fib_0 := bull_DealingRangeHigh                           // 0%
+    bull_Fib_Eq := bull_DealingRangeLow + (range_bull * fib_eq)   // 50% Equilibrium
+    bull_Fib_OTE1 := bull_DealingRangeLow + (range_bull * fib_ote1) // 62% OTE Start
+    bull_Fib_OTE2 := bull_DealingRangeLow + (range_bull * fib_ote2) // 70.5% OTE
+    bull_Fib_OTE := bull_DealingRangeLow + (range_bull * fib_ote)   // 79% Optimal Entry
+    bull_Fib_100 := bull_DealingRangeLow                          // 100%
+    
+    // Extension targets
+    bull_Target1 := bull_DealingRangeHigh + (range_bull * 0.5)    // -50% (150% extension)
+    bull_Target2 := bull_DealingRangeHigh + range_bull            // -100% (200% extension)
+    bull_TargetSym := bull_DealingRangeHigh + (range_bull * 2)    // -200% (300% Symmetrical)
+
+// BULLISH ENTRY LOGIC
+bool bull_InOTEZone = bull_SetupActive and not na(bull_Fib_OTE1) and not na(bull_Fib_OTE) and
+                      low <= bull_Fib_OTE and low >= bull_Fib_OTE1
+
+bool bull_Confirmation = useConfirmation ? (close > open and close >= bull_Fib_OTE1) : true
+
+bool bull_Entry = bull_InOTEZone and bull_Confirmation and strategy.position_size == 0
+
+if bull_Entry
+    strategy.entry("LONG", strategy.long)
+    strategy.exit("Exit Long", "LONG", stop=low, limit=bull_Target1)
+    
+    // Webhook
+    alert('{"symbol":"' + syminfo.ticker + '","type":"BUY","indicator":"ict_ote","entry":"' + 
+          str.tostring(close) + '","stopLoss":"' + str.tostring(low) + '","takeProfit":"' + 
+          str.tostring(bull_Target1) + '"}', alert.freq_once_per_bar)
+    
+    // Reset
+    bull_SetupActive := false
+    bull_DealingRangeLow := na
+    bull_DealingRangeHigh := na
+
+// Reset if new lower low breaks structure
+if bull_SetupActive and not na(pivotLow) and pivotLow[pivotLength] < bull_DealingRangeLow
+    bull_SetupActive := false
+    bull_DealingRangeLow := na
+    bull_DealingRangeHigh := na
+
+// ==================== BEARISH OTE SETUP ====================
+var float bear_DealingRangeHigh = na
+var int bear_DealingRangeHighBar = na
+var float bear_DealingRangeLow = na
+var int bear_DealingRangeLowBar = na
+var bool bear_SetupActive = false
+var bool bear_SetupJustActivated = false
+
+// Step 1: Identify dealing range HIGH (in bearish trend)
+if not na(pivotHigh) and na(bear_DealingRangeHigh)
+    bear_DealingRangeHigh := pivotHigh[pivotLength]
+    bear_DealingRangeHighBar := bar_index - pivotLength
+
+// Step 2: After high, identify dealing range LOW
+if not na(bear_DealingRangeHigh) and na(bear_DealingRangeLow) and not na(pivotLow)
+    if pivotLow[pivotLength] < bear_DealingRangeHigh
+        bear_DealingRangeLow := pivotLow[pivotLength]
+        bear_DealingRangeLowBar := bar_index - pivotLength
+        bear_SetupActive := true
+        bear_SetupJustActivated := true
+    else
+        bear_SetupJustActivated := false
+else
+    bear_SetupJustActivated := false
+
+// Calculate Bearish OTE Fibonacci Levels
+float bear_Fib_0 = na
+float bear_Fib_Eq = na
+float bear_Fib_OTE1 = na
+float bear_Fib_OTE2 = na
+float bear_Fib_OTE = na
+float bear_Fib_100 = na
+float bear_Target1 = na
+float bear_Target2 = na
+float bear_TargetSym = na
+
+if bear_SetupActive and not na(bear_DealingRangeHigh) and not na(bear_DealingRangeLow)
+    float range_bear = bear_DealingRangeHigh - bear_DealingRangeLow
+    
+    // Fibonacci levels (from HIGH to LOW, retracement)
+    bear_Fib_0 := bear_DealingRangeLow                            // 0%
+    bear_Fib_Eq := bear_DealingRangeHigh - (range_bear * fib_eq)  // 50% Equilibrium
+    bear_Fib_OTE1 := bear_DealingRangeHigh - (range_bear * fib_ote1) // 62% OTE Start
+    bear_Fib_OTE2 := bear_DealingRangeHigh - (range_bear * fib_ote2) // 70.5% OTE
+    bear_Fib_OTE := bear_DealingRangeHigh - (range_bear * fib_ote)   // 79% Optimal Entry
+    bear_Fib_100 := bear_DealingRangeHigh                         // 100%
+    
+    // Extension targets
+    bear_Target1 := bear_DealingRangeLow - (range_bear * 0.5)     // -50%
+    bear_Target2 := bear_DealingRangeLow - range_bear             // -100%
+    bear_TargetSym := bear_DealingRangeLow - (range_bear * 2)     // -200%
+
+// BEARISH ENTRY LOGIC
+bool bear_InOTEZone = bear_SetupActive and not na(bear_Fib_OTE1) and not na(bear_Fib_OTE) and
+                      high >= bear_Fib_OTE1 and high <= bear_Fib_OTE
+
+bool bear_Confirmation = useConfirmation ? (close < open and close <= bear_Fib_OTE) : true
+
+bool bear_Entry = bear_InOTEZone and bear_Confirmation and strategy.position_size == 0
+
+if bear_Entry
+    strategy.entry("SHORT", strategy.short)
+    strategy.exit("Exit Short", "SHORT", stop=high, limit=bear_Target1)
+    
+    // Webhook
+    alert('{"symbol":"' + syminfo.ticker + '","type":"SELL","indicator":"ict_ote","entry":"' + 
+          str.tostring(close) + '","stopLoss":"' + str.tostring(high) + '","takeProfit":"' + 
+          str.tostring(bear_Target1) + '"}', alert.freq_once_per_bar)
+    
+    // Reset
+    bear_SetupActive := false
+    bear_DealingRangeHigh := na
+    bear_DealingRangeLow := na
+
+// Reset if new higher high breaks structure
+if bear_SetupActive and not na(pivotHigh) and pivotHigh[pivotLength] > bear_DealingRangeHigh
+    bear_SetupActive := false
+    bear_DealingRangeHigh := na
+    bear_DealingRangeLow := na
+
+// ============================================================================
+// VISUALS
+// ============================================================================
+
+// Trend MA
+plot(ma, "Trend Filter (EMA)", color.new(color.yellow, 40), 2)
+
+// --- BULLISH OTE VISUALS ---
+
+// Dealing Range (Bull)
+var line bull_RangeLine = na
+if bull_SetupJustActivated and showDealingRange
+    bull_RangeLine := line.new(bull_DealingRangeLowBar, bull_DealingRangeLow, 
+                                bull_DealingRangeHighBar, bull_DealingRangeHigh, 
+                                color=color.new(color.blue, 50), width=2, style=line.style_dashed)
+    label.new(bull_DealingRangeLowBar, bull_DealingRangeLow, "LOW", 
+              color=color.new(color.blue, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
+    label.new(bull_DealingRangeHighBar, bull_DealingRangeHigh, "HIGH", 
+              color=color.new(color.blue, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// OTE Zone (Bull) - 0.62 to 0.79
+plot(bull_SetupActive ? bull_Fib_OTE : na, "OTE 0.79", color.new(color.green, 0), 3)
+plot(bull_SetupActive ? bull_Fib_OTE1 : na, "OTE 0.62", color.new(color.green, 0), 3)
+
+bull_OTE_Top = plot(bull_SetupActive ? bull_Fib_OTE : na, color=na)
+bull_OTE_Bottom = plot(bull_SetupActive ? bull_Fib_OTE1 : na, color=na)
+fill(bull_OTE_Top, bull_OTE_Bottom, color.new(color.green, 85), title="Bullish OTE Zone")
+
+// All Fib Levels (Bull)
+if showAllLevels
+    plot(bull_SetupActive ? bull_Fib_0 : na, "0% (High)", color.new(color.lime, 0), 1)
+    plot(bull_SetupActive ? bull_Fib_Eq : na, "50% Equilibrium", color.new(color.gray, 50), 1, plot.style_circles)
+    plot(bull_SetupActive ? bull_Fib_OTE2 : na, "70.5% OTE", color.new(color.orange, 50), 1, plot.style_circles)
+    plot(bull_SetupActive ? bull_Fib_100 : na, "100% (Low)", color.new(color.red, 0), 1)
+    plot(bull_SetupActive ? bull_Target1 : na, "Target 1 (-50%)", color.new(color.aqua, 30), 1, plot.style_circles)
+    plot(bull_SetupActive ? bull_Target2 : na, "Target 2 (-100%)", color.new(color.blue, 30), 1, plot.style_circles)
+
+// --- BEARISH OTE VISUALS ---
+
+// Dealing Range (Bear)
+var line bear_RangeLine = na
+if bear_SetupJustActivated and showDealingRange
+    bear_RangeLine := line.new(bear_DealingRangeHighBar, bear_DealingRangeHigh, 
+                                bear_DealingRangeLowBar, bear_DealingRangeLow, 
+                                color=color.new(color.red, 50), width=2, style=line.style_dashed)
+    label.new(bear_DealingRangeHighBar, bear_DealingRangeHigh, "HIGH", 
+              color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
+    label.new(bear_DealingRangeLowBar, bear_DealingRangeLow, "LOW", 
+              color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+// OTE Zone (Bear) - 0.62 to 0.79
+plot(bear_SetupActive ? bear_Fib_OTE : na, "OTE 0.79", color.new(color.red, 0), 3)
+plot(bear_SetupActive ? bear_Fib_OTE1 : na, "OTE 0.62", color.new(color.red, 0), 3)
+
+bear_OTE_Top = plot(bear_SetupActive ? bear_Fib_OTE : na, color=na)
+bear_OTE_Bottom = plot(bear_SetupActive ? bear_Fib_OTE1 : na, color=na)
+fill(bear_OTE_Top, bear_OTE_Bottom, color.new(color.red, 85), title="Bearish OTE Zone")
+
+// All Fib Levels (Bear)
+if showAllLevels
+    plot(bear_SetupActive ? bear_Fib_0 : na, "0% (Low)", color.new(color.red, 0), 1)
+    plot(bear_SetupActive ? bear_Fib_Eq : na, "50% Equilibrium", color.new(color.gray, 50), 1, plot.style_circles)
+    plot(bear_SetupActive ? bear_Fib_OTE2 : na, "70.5% OTE", color.new(color.orange, 50), 1, plot.style_circles)
+    plot(bear_SetupActive ? bear_Fib_100 : na, "100% (High)", color.new(color.lime, 0), 1)
+    plot(bear_SetupActive ? bear_Target1 : na, "Target 1 (-50%)", color.new(color.fuchsia, 30), 1, plot.style_circles)
+    plot(bear_SetupActive ? bear_Target2 : na, "Target 2 (-100%)", color.new(color.purple, 30), 1, plot.style_circles)
+
+// Entry Labels
+if bull_Entry
+    label.new(bar_index, low, "🟢 LONG OTE\n" + 
+              "Entry: " + str.tostring(close, "#.####") + "\n" +
+              "SL: " + str.tostring(low, "#.####") + "\n" +
+              "TP: " + str.tostring(bull_Target1, "#.####") + "\n" +
+              "R:R = " + str.tostring((bull_Target1 - close) / (close - low), "#.##"), 
+              color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_up, size=size.normal)
+
+if bear_Entry
+    label.new(bar_index, high, "🔴 SHORT OTE\n" + 
+              "Entry: " + str.tostring(close, "#.####") + "\n" +
+              "SL: " + str.tostring(high, "#.####") + "\n" +
+              "TP: " + str.tostring(bear_Target1, "#.####") + "\n" +
+              "R:R = " + str.tostring((close - bear_Target1) / (high - close), "#.##"), 
+              color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down, size=size.normal)
+
+// Background for active setups
+bgcolor(bull_SetupActive ? color.new(color.green, 97) : na, title="Bull Setup Active")
+bgcolor(bear_SetupActive ? color.new(color.red, 97) : na, title="Bear Setup Active")
+
+// Status Table
+var table statusTable = table.new(position.top_right, 2, 6, border_width=1)
+
+if barstate.islast
+    table.cell(statusTable, 0, 0, "ICT OTE STATUS", bgcolor=color.new(color.blue, 70), text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 0, "VALUE", bgcolor=color.new(color.blue, 70), text_color=color.white, text_size=size.small)
+    
+    table.cell(statusTable, 0, 1, "Trend", text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 1, bullishTrend ? "BULLISH ⬆️" : bearishTrend ? "BEARISH ⬇️" : "NEUTRAL", 
+              bgcolor=bullishTrend ? color.new(color.green, 70) : bearishTrend ? color.new(color.red, 70) : color.new(color.gray, 80), 
+              text_color=color.white, text_size=size.small)
+    
+    table.cell(statusTable, 0, 2, "BUY OTE", text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 2, bull_SetupActive ? "ACTIVE 🎯" : "Waiting...", 
+              bgcolor=bull_SetupActive ? color.new(color.green, 70) : color.new(color.gray, 80), 
+              text_color=color.white, text_size=size.small)
+    
+    table.cell(statusTable, 0, 3, "SELL OTE", text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 3, bear_SetupActive ? "ACTIVE 🎯" : "Waiting...", 
+              bgcolor=bear_SetupActive ? color.new(color.red, 70) : color.new(color.gray, 80), 
+              text_color=color.white, text_size=size.small)
+    
+    table.cell(statusTable, 0, 4, "OTE Zone", text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 4, "0.62 - 0.79", bgcolor=color.new(color.orange, 70), text_color=color.white, text_size=size.small)
+    
+    table.cell(statusTable, 0, 5, "Primary OTE", text_color=color.white, text_size=size.small)
+    table.cell(statusTable, 1, 5, "0.79 (79%)", bgcolor=color.new(color.purple, 70), text_color=color.white, text_size=size.small)
