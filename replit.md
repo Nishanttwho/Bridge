@@ -1,195 +1,7 @@
 # Trading Bridge - TradingView to MetaTrader 5
 
-## Project Overview
-An automated trading bridge that receives trading signals from TradingView indicators and executes them in MetaTrader 5. The application provides real-time monitoring, trade execution tracking, and comprehensive settings management.
-
-## Architecture
-
-### Frontend (React + TypeScript)
-- **Dashboard**: Real-time stats display with connection status
-- **Signals Table**: Live signal monitoring with status tracking
-- **Settings Panel**: MT5 configuration and trading parameters
-- **WebSocket Integration**: Real-time updates for signals and stats
-
-### Backend (Express + TypeScript)
-- **Webhook Endpoint**: Receives TradingView alerts via POST /api/webhook
-- **WebSocket Server**: Broadcasts real-time updates to connected clients
-- **MT5 Integration**: WebSocket-based bidirectional communication for instant trade execution
-- **In-Memory Storage**: Fast signal and trade tracking
-
-### Data Models
-- **Signal**: TradingView alert with type (BUY/SELL), symbol, price, status, plus optional indicator fields (entry, SL, TP)
-- **Trade**: MT5 trade execution record with profit/loss tracking
-- **Settings**: MT5 credentials and trading parameters
-
-## Key Features
-✅ Real-time signal reception from TradingView webhooks
-✅ Automatic trade execution in MT5
-✅ Live dashboard with connection status
-✅ Success rate and execution tracking
-✅ Configurable lot size, spread, and slippage limits
-✅ Auto-trade toggle for manual control
-✅ **Exit Strategy Options** - Choose between:
-  - **Exit on Opposite Signal**: Trades exit when opposite signal arrives (NO TP/SL placed on trades)
-  - **TP/SL Mode**: Use configurable Take Profit and Stop Loss distances in pips
-✅ **Target Trend Indicator Support** - Accepts indicator-provided entry, SL, and TP levels from TradingView alerts (falls back to pip-based settings when not provided)
-✅ **WebSocket-Only Communication** - Zero-latency real-time bidirectional communication (no HTTP polling)
-
-## Setup Instructions
-
-### TradingView Configuration
-1. Go to Settings in the dashboard
-2. Copy the webhook URL displayed
-3. In TradingView, create an alert on your indicator
-4. Set the webhook URL in alert settings
-5. Configure alert message to include signal type and symbol
-
-### MT5 Configuration (WebSocket - Real-time)
-1. **Install MT5 Expert Advisor**:
-   - Copy TradingViewWebSocket_EA.mq5 to MT5/Experts folder
-   - Compile EA in MetaEditor
-   - See `mt5-files/WEBSOCKET_QUICK_START.md` for detailed steps
-
-2. **Configure MT5 Terminal**:
-   - Enable "Allow automated trading" in Tools → Options
-   - Whitelist your Replit app URL in "Allow WebRequest for listed URLs"
-   - Attach TradingViewWebSocket_EA to any chart
-   - Configure EA inputs: ServerURL and ApiSecret
-   - Verify EA is running (check Experts tab logs for "Connected successfully!")
-
-3. **Configure Application Settings**:
-   - Open Settings dialog in the app
-   - Set MT5 API Secret (must match EA ApiSecret)
-   - Configure account balance and risk parameters
-   - Choose exit strategy:
-     - **Enable "Exit on Opposite Signal"**: Trades close ONLY when opposite signal arrives (no TP/SL placed)
-     - **Disable "Exit on Opposite Signal"**: Use TP/SL pips settings for automatic exits
-   - Set default Take Profit and Stop Loss in pips (used when Exit on Opposite Signal is disabled)
-   - Toggle auto-trade on/off as needed
-
-## Technology Stack
-- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend**: Express.js, WebSocket (ws)
-- **State Management**: TanStack Query
-- **Forms**: React Hook Form + Zod validation
-- **Styling**: Dark theme optimized for trading
-
-## Recent Changes
-- ✅ **CRITICAL FIX: PARTIAL EXECUTION PREVENTION** (October 14, 2025)
-  - **Fixed partial trade executions during MT5 disconnections** - System now re-verifies MT5 connection after closing opposite trades
-  - **Connection re-check safeguard** - Before opening new trade, system confirms MT5 is still connected after closing opposites
-  - **Auto-retry on reconnect** - Pending trades automatically execute when MT5 reconnects with enhanced logging
-  - **Clear user feedback** - If MT5 disconnects mid-execution, user sees "MT5 disconnected - will execute on reconnect" message
-  - **Enhanced reconnection logging** - Shows count of pending commands and executes them with proper signal status updates
-  - **Root cause addressed** - Prevents the exact issue where gold BUY closed but SELL never opened due to network glitch
-  - **Result: Zero risk of stuck positions - trades either execute completely or queue safely for reconnect**
-- ✅ **POSITION CLOSING UI IMPROVEMENTS** (October 14, 2025)
-  - **Fixed close button responsiveness** - Added instant visual feedback when closing positions
-  - **Duplicate close prevention** - Set-based tracking prevents multiple close commands for same position
-  - **Loading indicator** - Close button shows spinning loader during position closure
-  - **Disabled state** - Button becomes disabled while closing to prevent user confusion
-  - **Toast notifications** - Users get immediate feedback when close command is sent
-  - **Safety timeout** - 10-second automatic state cleanup prevents stuck UI states
-  - **Optimized MT5 EA timer** - Reduced from 5 to 1 second for faster command processing
-  - **Result: Instant position closing with clear user feedback and zero duplicate commands**
-- ✅ **MERGED EXIT STRATEGY OPTIONS** (October 14, 2025)
-  - **Unified exit control** - Single toggle for exit strategy instead of separate TP/SL and auto-close options
-  - **Exit on Opposite Signal mode** - When enabled: NO TP/SL placed, trades exit ONLY when opposite signal arrives
-  - **TP/SL mode** - When disabled: Uses configurable TP/SL pips for automatic exits
-  - **Updated Settings UI** - Clear descriptions explaining when TP/SL settings are used
-  - **Risk-based position sizing** - Lot size calculated using risk percentage regardless of exit mode
-  - **Result: Clearer exit strategy management with two distinct trading styles**
-- ✅ **REMOVED HTTP POLLING - WEBSOCKET ONLY** (October 14, 2025)
-  - **Eliminated HTTP endpoints** - Removed /api/mt5/next-command and /api/mt5/report endpoints
-  - **Pure WebSocket communication** - All MT5 communication happens via WebSocket (/mt5-ws)
-  - **Zero-latency execution** - Commands sent instantly to MT5 when received
-  - **Simplified architecture** - Single communication protocol for all MT5 interactions
-  - **Verified MT5 EA compatibility** - TradingViewWebSocket_EA.mq5 is 100% WebSocket-based
-  - **Result: Faster, simpler, and more reliable trade execution**
-- ✅ **OTE INDICATOR UPGRADED TO V2.0** (January 2025)
-  - **Fixed indicator lines to move with chart** - Uses extend=extend.right for dynamic line positioning
-  - **Upgraded to precise 0.705 level** - No longer uses zones, only the exact 0.705 Fibonacci level
-  - **Advanced trend detection** - Market structure analysis (higher highs/higher lows) + multi-timeframe confirmation
-  - **Rejection-based entry logic** - Price must tap 0.705 and close opposite color candle
-  - **Improved SL/TP placement** - SL at rejection candle low/high, TP at dealing range high/low
-  - **HTF trend confirmation** - Shows both current timeframe and higher timeframe trend in info table
-  - **Updated webhook indicator name** - Changed from "ote" to "ote_0705" for clarity
-- ✅ **ICT OTE INDICATOR CREATED** (January 2025)
-  - **Created comprehensive OTE Pine Script indicator** - Implements ICT's Optimal Trade Entry concept
-  - **Automatic trend detection** - Uses EMA to identify uptrends/downtrends
-  - **Swing point identification** - Automatically detects swing lows and highs for zone calculation
-  - **Entry confirmation logic** - Validates candle touches zone and closes in trend direction
-  - **Visual zone display** - Shows OTE zones with color-coded boxes (green for buy, red for sell)
-  - **Zone cleanup** - Automatically removes old zones when setups become invalid
-  - **Info table** - Real-time display of trend, zone %, swing levels, and alert status
-  - **Webhook integration** - Sends symbol, type, indicator, entry, stopLoss, takeProfit to backend
-  - **Position sizing handled server-side** - Backend calculates lot size based on risk settings
-  - **Created OTE_STRATEGY_GUIDE.md** - Complete setup instructions, best practices, troubleshooting
-  - **Created tradingview-strategies/README.md** - Comprehensive guide to all available indicators
-  - **Updated TRADINGVIEW_WEBHOOK_GUIDE.md** - Added OTE section with webhook format and examples
-  - **Result: Professional ICT OTE indicator ready for live trading with full documentation**
-- ✅ **TARGET TREND INDICATOR INTEGRATION** (October 13, 2025)
-  - **Added indicator support to schema** - Extended Signal model with indicatorType, entryPrice, stopLoss, takeProfit fields
-  - **Fixed storage persistence** - MemStorage now correctly saves all indicator fields
-  - **Enhanced webhook parsing** - Supports flexible field naming (entry/entryPrice, stopLoss/sl, takeProfit1/tp1)
-  - **Intelligent trade execution** - Uses indicator-provided SL/TP when available, falls back to pip-based settings
-  - **Updated frontend display** - Signals table shows Entry, SL, TP columns with color coding (green for TP, red for SL)
-  - **Created comprehensive documentation** - TRADINGVIEW_WEBHOOK_GUIDE.md with BUY/SELL examples
-  - **Removed dead code** - Eliminated confusing legacy executeTrade function
-  - **Result: Full support for indicator-based trading with proper fallback to manual settings**
-- ✅ **MIGRATED TO WEBSOCKET** (October 13, 2025)
-  - **Implemented real-time WebSocket communication** - Replaced HTTP polling with bidirectional WebSocket for instant trade execution
-  - **Created TradingViewWebSocket_EA.mq5** - New MT5 Expert Advisor using native socket functions
-  - **Fixed upgrade handler bug** - Scoped WebSocket interception to /mt5-ws path only (preserves dashboard WebSocket)
-  - **Added comprehensive documentation** - Created WEBSOCKET_QUICK_START.md with setup and troubleshooting
-  - **Verified security** - API secret authentication via query parameter, proper connection handling
-  - **Result: ZERO LATENCY trade execution (no 1-second polling delay)**
-- ✅ **CRITICAL BUGFIXES - PRODUCTION READY** (October 12, 2025)
-  - **Fixed duplicate trade execution on 1-minute candles** - Extended deduplication from 5 to 60 seconds
-  - **Fixed race condition in signal processing** - Signal status updated to 'pending' BEFORE command creation
-  - **Added duplicate command prevention** - Checks for existing commands for same signal before enqueueing
-  - **Verified TP/SL calculations** - Confirmed correct pip distances (BUY: SL below entry, TP above; SELL: opposite)
-  - **Added comprehensive logging** - Full [WEBHOOK], [MT5-POLL], [MT5-REPORT] trace for debugging
-  - **Result: ONE SIGNAL = ONE TRADE (guaranteed, production-safe)**
-- ✅ **CRITICAL BUGFIXES** (October 2025 - Previous)
-  - Fixed webhook endpoint using hardcoded TP/SL values instead of configured settings
-  - Fixed TP calculation (was null, now properly calculated from defaultTpPips)
-  - Fixed auto-close to only affect same symbol (was closing ALL opposite positions)
-- ✅ **Added configurable TP/SL settings** (December 2025)
-  - Default Take Profit in pips (configurable in Settings)
-  - Default Stop Loss in pips (configurable in Settings)
-  - Lot size calculation now uses configured SL pips for risk management
-- ✅ **Added auto-close on opposite signal option** (December 2025)
-  - Toggle to automatically close positions when opposite signal arrives
-  - BUY positions auto-close when SELL signal comes (and vice versa)
-  - Only closes positions for the SAME symbol (symbol-specific)
-  - Configurable on/off in Settings dialog
-- ✅ **Migrated to WebSocket system** (replaced HTTP polling for zero-latency execution)
-- ✅ Created MT5 Expert Advisor using native socket functions (TradingViewWebSocket_EA.mq5)
-- ✅ Implemented custom HTTP upgrade handler for MT5's manual WebSocket handshake
-- ✅ Built bidirectional WebSocket communication (/mt5-ws endpoint)
-- ✅ Added real-time heartbeat tracking for accurate connection status
-- ✅ Updated installation guide with WebSocket setup (WEBSOCKET_QUICK_START.md)
-- ✅ Complete schema definitions for signals, trades, and settings
-- ✅ Built comprehensive dashboard with real-time stats cards
-- ✅ Created signals table with live WebSocket updates
-- ✅ Implemented settings dialog with MT5 configuration
-- ✅ Added connection status monitoring
-- ✅ Fixed WebSocket real-time updates for signal status changes
-- ✅ Completed end-to-end testing: webhook → signal → trade execution → UI updates
-- ✅ Verified auto-trade toggle functionality
-- ✅ All features tested and working correctly
-
-## Testing Summary
-**Test Results: ✅ ALL PASSED**
-- Dashboard loads with correct stats and empty states
-- Settings save and persist MT5 credentials
-- Webhook endpoint receives TradingView signals
-- Auto-trade ON: Signals execute successfully
-- Auto-trade OFF: Signals fail with proper error message
-- Real-time WebSocket updates work instantly
-- Success rate calculates correctly (67% = 2/3 executed)
-- Connection status updates based on MT5 configuration
+## Overview
+This project is an automated trading bridge designed to receive trading signals from TradingView indicators and execute them directly in MetaTrader 5 (MT5). Its primary purpose is to automate trading strategies, providing real-time monitoring, trade execution tracking, and extensive configuration options. The system aims to offer a reliable and low-latency solution for traders looking to automate their TradingView-based strategies within the MT5 environment.
 
 ## User Preferences
 - Dark mode by default (trading environment standard)
@@ -197,3 +9,40 @@ An automated trading bridge that receives trading signals from TradingView indic
 - Color-coded signals (green for BUY, red for SELL)
 - Real-time WebSocket updates (instant, no polling needed)
 - Professional fintech dashboard design
+
+## System Architecture
+
+### UI/UX Decisions
+The user interface features a professional fintech dashboard with a default dark mode, optimized for a trading environment. It utilizes monospaced fonts for critical numerical data and color-coding (green for BUY, red for SELL) for clear signal visualization. Real-time updates are driven by WebSockets.
+
+### Technical Implementations
+The application consists of a React and TypeScript frontend and an Express and TypeScript backend.
+-   **Frontend**: Provides a real-time dashboard, a signals table for live monitoring, and a settings panel for MT5 configuration. It integrates with WebSockets for real-time data updates.
+-   **Backend**: Features a webhook endpoint for receiving TradingView alerts, a WebSocket server for broadcasting updates, and a direct WebSocket-based communication with MT5 for instant trade execution. In-memory storage is used for fast signal and trade tracking.
+-   **Data Models**: Includes `Signal` (TradingView alert with type, symbol, price, status, and optional indicator fields), `Trade` (MT5 execution record with P/L), and `Settings` (MT5 credentials and trading parameters).
+
+### Feature Specifications
+-   **Real-time Signal Reception**: Processes TradingView webhooks for immediate signal intake.
+-   **Automated Trade Execution**: Automatically executes trades in MT5 based on received signals.
+-   **Live Dashboard**: Displays connection status, real-time statistics, and success rates.
+-   **Configurable Trading Parameters**: Allows users to set lot size, spread, slippage limits, and toggle auto-trading.
+-   **Flexible Exit Strategies**:
+    -   **Exit on Opposite Signal**: Trades close automatically upon receiving an opposite signal, without predefined TP/SL.
+    -   **TP/SL Mode**: Uses configurable Take Profit (TP) and Stop Loss (SL) distances in pips.
+-   **Target Trend Indicator Support**: Accepts entry, SL, and TP levels directly from TradingView indicators, with a fallback to pip-based settings if not provided.
+-   **WebSocket-Only Communication**: Ensures zero-latency, real-time bidirectional communication between the application and MT5, eliminating HTTP polling.
+
+### System Design Choices
+The system prioritizes real-time performance and reliability through a pure WebSocket-based communication model for all MT5 interactions. It employs an in-memory storage for high-speed data access and a clear separation of concerns between frontend and backend. Trade execution order is carefully managed to open new positions before closing opposite ones, preventing execution gaps. Robust error handling and reconnection logic are implemented to prevent partial executions during MT5 disconnections.
+
+## External Dependencies
+-   **TradingView**: Source of trading signals via webhooks.
+-   **MetaTrader 5 (MT5)**: Trading platform for executing trades, integrated via a custom WebSocket Expert Advisor (`TradingViewWebSocket_EA.mq5`).
+-   **React**: Frontend library.
+-   **TypeScript**: Programming language for both frontend and backend.
+-   **Express.js**: Backend web framework.
+-   **WebSocket (ws)**: Library for WebSocket communication.
+-   **Tailwind CSS**: Utility-first CSS framework for styling.
+-   **shadcn/ui**: UI component library.
+-   **TanStack Query**: For state management in the frontend.
+-   **React Hook Form + Zod**: For form handling and validation.
