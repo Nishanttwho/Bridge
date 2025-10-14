@@ -192,6 +192,7 @@ export class MemStorage implements IStorage {
         defaultSlPips: '20',
         autoTrade: 'true',
         autoCloseOnOppositeSignal: 'true',
+        fixedLotSize: '0.01',
         lastMt5Heartbeat: null,
       };
     }
@@ -208,6 +209,7 @@ export class MemStorage implements IStorage {
       riskPercentage: insertSettings.riskPercentage || '1',
       defaultTpPips: insertSettings.defaultTpPips || '30',
       defaultSlPips: insertSettings.defaultSlPips || '20',
+      fixedLotSize: insertSettings.fixedLotSize || '0.01',
       autoTrade: insertSettings.autoTrade || 'true',
       autoCloseOnOppositeSignal: insertSettings.autoCloseOnOppositeSignal || 'true',
       lastMt5Heartbeat: this.settings?.lastMt5Heartbeat ?? null,
@@ -228,6 +230,7 @@ export class MemStorage implements IStorage {
         defaultSlPips: '20',
         autoTrade: 'true',
         autoCloseOnOppositeSignal: 'true',
+        fixedLotSize: '0.01',
         lastMt5Heartbeat: new Date(),
       };
     } else {
