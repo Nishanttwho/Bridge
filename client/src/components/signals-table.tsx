@@ -106,7 +106,7 @@ export function SignalsTable({ signals, isLoading }: SignalsTableProps) {
                   {signal.status === 'pending' && (
                     signal.errorMessage ? (
                       <Tooltip>
-                        <TooltipTrigger asChild>
+                        <TooltipTrigger>
                           <Badge variant="outline" className="gap-1 border-chart-4/50 bg-chart-4/10 text-chart-4 cursor-help">
                             <AlertCircle className="h-3 w-3" />
                             Pending
@@ -133,7 +133,7 @@ export function SignalsTable({ signals, isLoading }: SignalsTableProps) {
                   {signal.status === 'failed' && (
                     signal.errorMessage ? (
                       <Tooltip>
-                        <TooltipTrigger asChild>
+                        <TooltipTrigger>
                           <Badge variant="outline" className="gap-1 border-destructive/50 bg-destructive/10 text-destructive cursor-help" data-testid={`badge-failed-${signal.id}`}>
                             <XCircle className="h-3 w-3" />
                             Failed
