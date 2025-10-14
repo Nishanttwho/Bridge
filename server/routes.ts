@@ -309,7 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           console.log(`  Calculated volume: ${volume} lots (${slPips.toFixed(1)} pips risk)`);
         } else {
-          // Use pip-based settings (legacy mode)
+          // Use pip-based settings (calculate absolute prices from pips)
           const slPips = parseFloat(settings.defaultSlPips || '20');
           const tpPips = parseFloat(settings.defaultTpPips || '30');
           const accountBalance = parseFloat(settings.accountBalance || '10000');
@@ -318,9 +318,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[WEBHOOK] Using pip-based settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
           volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
           
-          // MT5 will calculate SL/TP from pips
-          slValue = slPips.toString();
-          tpValue = tpPips.toString();
+          // Calculate absolute SL/TP prices from signal price and pip distances
+          const entryPrice = parseFloat(signal.price);
+          const pipValue = getPipValue(signal.symbol);
+          
+          let sl: number;
+          let tp: number;
+          
+          if (signal.type === 'BUY') {
+            sl = entryPrice - (slPips * pipValue);
+            tp = entryPrice + (tpPips * pipValue);
+          } else {
+            sl = entryPrice + (slPips * pipValue);
+            tp = entryPrice - (tpPips * pipValue);
+          }
+          
+          slValue = sl.toFixed(5);
+          tpValue = tp.toFixed(5);
+          
+          console.log(`[WEBHOOK] Calculated absolute prices - Entry: ${entryPrice}, SL: ${slValue}, TP: ${tpValue}`);
         }
 
         // CRITICAL FIX 3: Update signal status to 'pending' BEFORE enqueueing command

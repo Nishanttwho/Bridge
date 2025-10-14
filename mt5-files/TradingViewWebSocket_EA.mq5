@@ -592,11 +592,11 @@ void ExecuteTrade(string commandId, string commandJson)
    string symbol = GetJsonValue(commandJson, "symbol");
    string type = GetJsonValue(commandJson, "type");
    double volume = StringToDouble(GetJsonValue(commandJson, "volume"));
-   double slPips = StringToDouble(GetJsonValue(commandJson, "slPips"));
-   double tpPips = StringToDouble(GetJsonValue(commandJson, "tpPips"));
+   double stopLoss = StringToDouble(GetJsonValue(commandJson, "stopLoss"));
+   double takeProfit = StringToDouble(GetJsonValue(commandJson, "takeProfit"));
    
-   Print("[TRADE] Symbol: ", symbol, ", Type: ", type, ", Volume: ", volume);
-   Print("[TRADE] SL Pips: ", slPips, ", TP Pips: ", tpPips);
+   Print("[TRADE] Received command - Symbol: ", symbol, ", Type: ", type, ", Volume: ", volume);
+   Print("[TRADE] SL: ", stopLoss, ", TP: ", takeProfit);
    
    if(symbol == "" || type == "")
    {
@@ -617,6 +617,12 @@ void ExecuteTrade(string commandId, string commandJson)
       return;
    }
    
+   // Normalize SL/TP prices to symbol's tick size
+   if(stopLoss > 0)
+      stopLoss = NormalizePrice(symbol, stopLoss);
+   if(takeProfit > 0)
+      takeProfit = NormalizePrice(symbol, takeProfit);
+   
    // Get current market price for execution
    double currentPrice;
    if(type == "BUY")
@@ -624,30 +630,7 @@ void ExecuteTrade(string commandId, string commandJson)
    else
       currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
    
-   // Calculate SL/TP from current price using pip distances
-   double stopLoss = 0;
-   double takeProfit = 0;
-   double pipValue = GetPipValue(symbol);
-   
-   if(slPips > 0)
-   {
-      if(type == "BUY")
-         stopLoss = currentPrice - (slPips * pipValue);
-      else
-         stopLoss = currentPrice + (slPips * pipValue);
-      stopLoss = NormalizePrice(symbol, stopLoss);
-   }
-   
-   if(tpPips > 0)
-   {
-      if(type == "BUY")
-         takeProfit = currentPrice + (tpPips * pipValue);
-      else
-         takeProfit = currentPrice - (tpPips * pipValue);
-      takeProfit = NormalizePrice(symbol, takeProfit);
-   }
-   
-   Print("[TRADE] Current Price: ", currentPrice, ", Calculated SL: ", stopLoss, ", TP: ", takeProfit);
+   Print("[TRADE] Current market price: ", currentPrice, ", Normalized SL: ", stopLoss, ", TP: ", takeProfit);
    
    // Validate SL/TP
    if(type == "BUY")
