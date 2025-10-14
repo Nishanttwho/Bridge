@@ -29,9 +29,11 @@ An automated trading bridge that receives trading signals from TradingView indic
 ✅ Success rate and execution tracking
 ✅ Configurable lot size, spread, and slippage limits
 ✅ Auto-trade toggle for manual control
-✅ **Configurable TP/SL in pips** - Set default Take Profit and Stop Loss distances
-✅ **Auto-close on opposite signal** - Option to automatically close BUY when SELL signal comes (and vice versa)
+✅ **Exit Strategy Options** - Choose between:
+  - **Exit on Opposite Signal**: Trades exit when opposite signal arrives (NO TP/SL placed on trades)
+  - **TP/SL Mode**: Use configurable Take Profit and Stop Loss distances in pips
 ✅ **Target Trend Indicator Support** - Accepts indicator-provided entry, SL, and TP levels from TradingView alerts (falls back to pip-based settings when not provided)
+✅ **WebSocket-Only Communication** - Zero-latency real-time bidirectional communication (no HTTP polling)
 
 ## Setup Instructions
 
@@ -59,9 +61,11 @@ An automated trading bridge that receives trading signals from TradingView indic
    - Open Settings dialog in the app
    - Set MT5 API Secret (must match EA ApiSecret)
    - Configure account balance and risk parameters
-   - Set default Take Profit and Stop Loss in pips
+   - Choose exit strategy:
+     - **Enable "Exit on Opposite Signal"**: Trades close ONLY when opposite signal arrives (no TP/SL placed)
+     - **Disable "Exit on Opposite Signal"**: Use TP/SL pips settings for automatic exits
+   - Set default Take Profit and Stop Loss in pips (used when Exit on Opposite Signal is disabled)
    - Toggle auto-trade on/off as needed
-   - Enable/disable auto-close on opposite signal
 
 ## Technology Stack
 - **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
@@ -71,6 +75,20 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **MERGED EXIT STRATEGY OPTIONS** (October 14, 2025)
+  - **Unified exit control** - Single toggle for exit strategy instead of separate TP/SL and auto-close options
+  - **Exit on Opposite Signal mode** - When enabled: NO TP/SL placed, trades exit ONLY when opposite signal arrives
+  - **TP/SL mode** - When disabled: Uses configurable TP/SL pips for automatic exits
+  - **Updated Settings UI** - Clear descriptions explaining when TP/SL settings are used
+  - **Risk-based position sizing** - Lot size calculated using risk percentage regardless of exit mode
+  - **Result: Clearer exit strategy management with two distinct trading styles**
+- ✅ **REMOVED HTTP POLLING - WEBSOCKET ONLY** (October 14, 2025)
+  - **Eliminated HTTP endpoints** - Removed /api/mt5/next-command and /api/mt5/report endpoints
+  - **Pure WebSocket communication** - All MT5 communication happens via WebSocket (/mt5-ws)
+  - **Zero-latency execution** - Commands sent instantly to MT5 when received
+  - **Simplified architecture** - Single communication protocol for all MT5 interactions
+  - **Verified MT5 EA compatibility** - TradingViewWebSocket_EA.mq5 is 100% WebSocket-based
+  - **Result: Faster, simpler, and more reliable trade execution**
 - ✅ **OTE INDICATOR UPGRADED TO V2.0** (January 2025)
   - **Fixed indicator lines to move with chart** - Uses extend=extend.right for dynamic line positioning
   - **Upgraded to precise 0.705 level** - No longer uses zones, only the exact 0.705 Fibonacci level
