@@ -75,6 +75,14 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **CRITICAL FIX: PARTIAL EXECUTION PREVENTION** (October 14, 2025)
+  - **Fixed partial trade executions during MT5 disconnections** - System now re-verifies MT5 connection after closing opposite trades
+  - **Connection re-check safeguard** - Before opening new trade, system confirms MT5 is still connected after closing opposites
+  - **Auto-retry on reconnect** - Pending trades automatically execute when MT5 reconnects with enhanced logging
+  - **Clear user feedback** - If MT5 disconnects mid-execution, user sees "MT5 disconnected - will execute on reconnect" message
+  - **Enhanced reconnection logging** - Shows count of pending commands and executes them with proper signal status updates
+  - **Root cause addressed** - Prevents the exact issue where gold BUY closed but SELL never opened due to network glitch
+  - **Result: Zero risk of stuck positions - trades either execute completely or queue safely for reconnect**
 - ✅ **POSITION CLOSING UI IMPROVEMENTS** (October 14, 2025)
   - **Fixed close button responsiveness** - Added instant visual feedback when closing positions
   - **Duplicate close prevention** - Set-based tracking prevents multiple close commands for same position
