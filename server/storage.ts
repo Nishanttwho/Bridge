@@ -57,6 +57,7 @@ export interface IStorage {
   getSymbolMappingByTradingViewSymbol(tradingViewSymbol: string): Promise<SymbolMapping | undefined>;
   deleteSymbolMapping(id: string): Promise<void>;
   mapSymbol(tradingViewSymbol: string): Promise<string>;
+  areSymbolsEquivalent(symbol1: string, symbol2: string): Promise<boolean>;
   
   // Stats
   getStats(): Promise<DashboardStats>;
@@ -401,8 +402,10 @@ export class MemStorage implements IStorage {
   }
 
   async getSymbolMappingByTradingViewSymbol(tradingViewSymbol: string): Promise<SymbolMapping | undefined> {
+    // Case-insensitive search for symbol mapping
+    const upperSymbol = tradingViewSymbol.toUpperCase();
     return Array.from(this.symbolMappings.values()).find(
-      m => m.tradingViewSymbol === tradingViewSymbol
+      m => m.tradingViewSymbol.toUpperCase() === upperSymbol
     );
   }
 
@@ -412,7 +415,47 @@ export class MemStorage implements IStorage {
 
   async mapSymbol(tradingViewSymbol: string): Promise<string> {
     const mapping = await this.getSymbolMappingByTradingViewSymbol(tradingViewSymbol);
-    return mapping ? mapping.mt5Symbol : tradingViewSymbol;
+    const mappedSymbol = mapping ? mapping.mt5Symbol : tradingViewSymbol;
+    
+    // Log the mapping for debugging
+    if (mapping) {
+      console.log(`[SYMBOL-MAP] Mapped "${tradingViewSymbol}" -> "${mappedSymbol}"`);
+    } else {
+      console.log(`[SYMBOL-MAP] No mapping found for "${tradingViewSymbol}", using as-is`);
+    }
+    
+    return mappedSymbol;
+  }
+
+  // Check if two symbols represent the same underlying instrument
+  // This handles cases where one is mapped and one is unmapped
+  async areSymbolsEquivalent(symbol1: string, symbol2: string): Promise<boolean> {
+    // Case 1: Direct match (case-insensitive)
+    if (symbol1.toUpperCase() === symbol2.toUpperCase()) {
+      return true;
+    }
+
+    // Case 2: Check if they map to the same MT5 symbol or if one is the unmapped version of the other
+    const allMappings = await this.getSymbolMappings();
+    
+    for (const mapping of allMappings) {
+      const tvSymbol = mapping.tradingViewSymbol;
+      const mt5Symbol = mapping.mt5Symbol;
+      
+      // Check if one symbol is the TradingView symbol and the other is the MT5 symbol
+      const isSymbol1TV = tvSymbol.toUpperCase() === symbol1.toUpperCase();
+      const isSymbol1MT5 = mt5Symbol.toUpperCase() === symbol1.toUpperCase();
+      const isSymbol2TV = tvSymbol.toUpperCase() === symbol2.toUpperCase();
+      const isSymbol2MT5 = mt5Symbol.toUpperCase() === symbol2.toUpperCase();
+      
+      // If symbol1 is TV and symbol2 is MT5 (or vice versa) from the same mapping, they're equivalent
+      if ((isSymbol1TV && isSymbol2MT5) || (isSymbol1MT5 && isSymbol2TV)) {
+        console.log(`[SYMBOL-MAP] Symbols "${symbol1}" and "${symbol2}" are equivalent via mapping: ${tvSymbol} -> ${mt5Symbol}`);
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   // Stats

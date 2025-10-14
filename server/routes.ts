@@ -236,6 +236,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Map TradingView symbol to MT5 symbol
       const mt5Symbol = await storage.mapSymbol(tradingViewSymbol);
       
+      console.log(`[WEBHOOK] Symbol mapping: TradingView="${tradingViewSymbol}" -> MT5="${mt5Symbol}"`);
+      
       const signalData = {
         type: normalizedType,
         symbol: mt5Symbol,
@@ -418,15 +420,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // Auto-close opposite positions if enabled (same symbol only)
+        // FIX: Open new trade FIRST, then close opposite trades
+        // This ensures the new position is established before closing the old one
+        
+        // Enqueue TRADE command for MT5 to execute
+        const tradeCommand = await storage.enqueueCommand({
+          action: 'TRADE',
+          symbol: signal.symbol,
+          type: signal.type,
+          volume: volume.toString(),
+          stopLoss: slValue,
+          takeProfit: tpValue,
+          signalId: signal.id,
+          status: 'pending',
+        });
+
+        console.log(`[WEBHOOK] Enqueued trade command ${tradeCommand.id} for signal ${signal.id}`);
+        
+        // Send command to MT5 via WebSocket (if connected)
+        sendCommandToMT5({
+          id: tradeCommand.id,
+          action: tradeCommand.action,
+          symbol: tradeCommand.symbol,
+          type: tradeCommand.type,
+          volume: tradeCommand.volume ? parseFloat(tradeCommand.volume) : undefined,
+          stopLoss: tradeCommand.stopLoss ? parseFloat(tradeCommand.stopLoss) : undefined,
+          takeProfit: tradeCommand.takeProfit ? parseFloat(tradeCommand.takeProfit) : undefined,
+        });
+
+        // Auto-close opposite positions if enabled (AFTER opening new trade)
         if (autoCloseOnOppositeSignal) {
           const oppositeType = signal.type === 'BUY' ? 'SELL' : 'BUY';
           const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
           
-          // Filter to only close trades for the SAME symbol
-          const oppositeTradesForSymbol = oppositeTrades.filter(t => t.symbol === signal.symbol);
+          // Filter to only close trades for the SAME symbol (using symbol equivalence check)
+          // This handles cases where old trades have unmapped symbols (e.g., "BTCUSD") 
+          // while new signals have mapped symbols (e.g., "BTCUSDm")
+          const oppositeTradesForSymbol = [];
+          for (const trade of oppositeTrades) {
+            if (await storage.areSymbolsEquivalent(trade.symbol, signal.symbol)) {
+              oppositeTradesForSymbol.push(trade);
+            }
+          }
           
-          console.log(`[WEBHOOK] Found ${oppositeTradesForSymbol.length} opposite trades to close for ${signal.symbol}`);
+          console.log(`[WEBHOOK] Found ${oppositeTradesForSymbol.length} opposite trades to close for ${signal.symbol} (after opening new trade)`);
           
           for (const oppositeTrade of oppositeTradesForSymbol) {
             const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
@@ -452,70 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const profit = calculateProfit(oppositeTrade, closePrice);
             await storage.closeTrade(oppositeTrade.id, closePrice, profit);
           }
-          
-          // CRITICAL FIX: Re-check MT5 connection AFTER closing opposite trades
-          // If MT5 disconnected during the close, don't send new trade command
-          const settingsRecheck = await storage.getSettings();
-          const isMt5StillConnected = settingsRecheck?.lastMt5Heartbeat && 
-            (Date.now() - new Date(settingsRecheck.lastMt5Heartbeat).getTime() < 10000);
-          
-          if (!isMt5StillConnected) {
-            const errorMsg = 'MT5 connection lost after closing opposite trade - new trade will execute when MT5 reconnects';
-            console.log(`[WEBHOOK] ${errorMsg}`);
-            await storage.updateSignalStatus(signal.id, 'pending', errorMsg);
-            
-            // Still enqueue the command so it executes when MT5 reconnects
-            const tradeCommand = await storage.enqueueCommand({
-              action: 'TRADE',
-              symbol: signal.symbol,
-              type: signal.type,
-              volume: volume.toString(),
-              stopLoss: slValue,
-              takeProfit: tpValue,
-              signalId: signal.id,
-              status: 'pending',
-            });
-            
-            console.log(`[WEBHOOK] Trade command ${tradeCommand.id} enqueued but MT5 disconnected - will execute on reconnect`);
-            
-            broadcast({
-              type: 'signal',
-              data: { ...signal, errorMessage: errorMsg },
-            });
-            
-            return res.json({ 
-              success: true, 
-              signalId: signal.id,
-              warning: errorMsg,
-              message: 'Opposite trade closed but new trade pending MT5 reconnection'
-            });
-          }
         }
-
-        // Enqueue TRADE command for MT5 to execute
-        const tradeCommand = await storage.enqueueCommand({
-          action: 'TRADE',
-          symbol: signal.symbol,
-          type: signal.type,
-          volume: volume.toString(),
-          stopLoss: slValue,
-          takeProfit: tpValue,
-          signalId: signal.id,
-          status: 'pending',
-        });
-
-        console.log(`[WEBHOOK] Enqueued trade command ${tradeCommand.id} for signal ${signal.id}`);
-        
-        // Send command to MT5 via WebSocket (if connected)
-        sendCommandToMT5({
-          id: tradeCommand.id,
-          action: tradeCommand.action,
-          symbol: tradeCommand.symbol,
-          type: tradeCommand.type,
-          volume: tradeCommand.volume ? parseFloat(tradeCommand.volume) : undefined,
-          stopLoss: tradeCommand.stopLoss ? parseFloat(tradeCommand.stopLoss) : undefined,
-          takeProfit: tradeCommand.takeProfit ? parseFloat(tradeCommand.takeProfit) : undefined,
-        });
       } else {
         // Auto-trade is disabled
         const errorMsg = 'Auto-trade is disabled - enable it in settings to execute trades';
@@ -856,6 +830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             const signal = await storage.getSignalById(command.signalId);
             if (signal && command.action === 'TRADE') {
+              console.log(`[MT5-WS] Creating trade with symbol: "${signal.symbol}" from signal ${command.signalId}`);
               await storage.createTrade({
                 signalId: command.signalId,
                 symbol: signal.symbol,
@@ -868,7 +843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 takeProfit: command.takeProfit,
                 status: 'open',
               });
-              console.log(`[MT5-WS] Trade created for signal ${command.signalId}`);
+              console.log(`[MT5-WS] Trade created for signal ${command.signalId} with symbol: "${signal.symbol}"`);
             }
 
             const updatedSignal = await storage.getSignalById(command.signalId);
