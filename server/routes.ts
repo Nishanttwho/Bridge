@@ -436,6 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings", async (_req, res) => {
     try {
       const settings = await storage.getSettings();
+      console.log('[API] GET /api/settings - Storage returned:', JSON.stringify(settings, null, 2));
       
       // Return default settings if none exist
       if (!settings) {
@@ -445,6 +446,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           accountBalance: '10000',
           riskPercentage: '1',
           autoTrade: 'true',
+          defaultTpPips: '30',
+          defaultSlPips: '20',
+          autoCloseOnOppositeSignal: 'true',
           lastMt5Heartbeat: null,
         });
         return;

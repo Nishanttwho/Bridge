@@ -181,6 +181,20 @@ export class MemStorage implements IStorage {
 
   // Settings
   async getSettings(): Promise<Settings | undefined> {
+    // Return default settings if none exist
+    if (!this.settings) {
+      this.settings = {
+        id: 'default',
+        mt5ApiSecret: null,
+        accountBalance: '10000',
+        riskPercentage: '1',
+        defaultTpPips: '30',
+        defaultSlPips: '20',
+        autoTrade: 'true',
+        autoCloseOnOppositeSignal: 'true',
+        lastMt5Heartbeat: null,
+      };
+    }
     return this.settings;
   }
 
