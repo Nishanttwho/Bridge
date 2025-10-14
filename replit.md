@@ -75,6 +75,15 @@ An automated trading bridge that receives trading signals from TradingView indic
 - **Styling**: Dark theme optimized for trading
 
 ## Recent Changes
+- ✅ **POSITION CLOSING UI IMPROVEMENTS** (October 14, 2025)
+  - **Fixed close button responsiveness** - Added instant visual feedback when closing positions
+  - **Duplicate close prevention** - Set-based tracking prevents multiple close commands for same position
+  - **Loading indicator** - Close button shows spinning loader during position closure
+  - **Disabled state** - Button becomes disabled while closing to prevent user confusion
+  - **Toast notifications** - Users get immediate feedback when close command is sent
+  - **Safety timeout** - 10-second automatic state cleanup prevents stuck UI states
+  - **Optimized MT5 EA timer** - Reduced from 5 to 1 second for faster command processing
+  - **Result: Instant position closing with clear user feedback and zero duplicate commands**
 - ✅ **MERGED EXIT STRATEGY OPTIONS** (October 14, 2025)
   - **Unified exit control** - Single toggle for exit strategy instead of separate TP/SL and auto-close options
   - **Exit on Opposite Signal mode** - When enabled: NO TP/SL placed, trades exit ONLY when opposite signal arrives
