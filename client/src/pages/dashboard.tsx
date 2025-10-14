@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, TrendingUp, CheckCircle2, Percent, Settings as SettingsIcon, Wallet, X, DollarSign } from "lucide-react";
+import { Activity, TrendingUp, CheckCircle2, Percent, Settings as SettingsIcon, Wallet, X, DollarSign, BookOpen } from "lucide-react";
+import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,16 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             <ConnectionStatus isConnected={isConnected} />
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="button-alert-guide"
+              asChild
+            >
+              <Link href="/alert-guide">
+                <BookOpen className="h-5 w-5" />
+              </Link>
+            </Button>
             <Button
               variant="ghost"
               size="icon"
