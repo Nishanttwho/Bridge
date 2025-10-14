@@ -44,9 +44,15 @@ function getPipValue(symbol: string): number {
     return 0.01;
   }
   
-  // Crypto pairs: use larger pip value
-  if (upperSymbol.includes('BTC') || upperSymbol.includes('ETH') || upperSymbol.includes('XRP') || 
-      upperSymbol.includes('LTC') || upperSymbol.includes('DOGE') || upperSymbol.includes('ADA')) {
+  // Crypto pairs: use larger pip value for realistic SL/TP
+  // BTC/ETH use $10 pip (so 20 pips = $200 SL, more reasonable for high-value cryptos)
+  if (upperSymbol.includes('BTC') || upperSymbol.includes('ETH')) {
+    return 10.0;
+  }
+  
+  // Other smaller cryptos use $1 pip
+  if (upperSymbol.includes('XRP') || upperSymbol.includes('LTC') || 
+      upperSymbol.includes('DOGE') || upperSymbol.includes('ADA')) {
     return 1.0;
   }
   
