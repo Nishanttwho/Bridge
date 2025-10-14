@@ -359,7 +359,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         <FormControl>
                           <Input type="number" step="0.1" min="0.1" {...field} data-testid="input-default-sl-pips" />
                         </FormControl>
-                        <FormDescription>Default SL distance in pips</FormDescription>
+                        <FormDescription>Used only when "Exit on Opposite Signal" is disabled</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -374,7 +374,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         <FormControl>
                           <Input type="number" step="0.1" min="0.1" {...field} data-testid="input-default-tp-pips" />
                         </FormControl>
-                        <FormDescription>Default TP distance in pips</FormDescription>
+                        <FormDescription>Used only when "Exit on Opposite Signal" is disabled</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -415,9 +415,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border bg-card p-4">
                       <div className="space-y-0.5">
-                        <FormLabel className="text-base">Auto Close on Opposite Signal</FormLabel>
+                        <FormLabel className="text-base">Exit on Opposite Signal</FormLabel>
                         <FormDescription>
-                          Automatically close BUY positions when SELL signal comes (and vice versa)
+                          When enabled: Exit trades only when opposite signal arrives (NO TP/SL placed). When disabled: Use TP/SL settings above
                         </FormDescription>
                       </div>
                       <FormControl>

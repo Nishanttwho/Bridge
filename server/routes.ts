@@ -106,7 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stats", async (_req, res) => {
     try {
       const stats = await storage.getStats();
-      // Use heartbeat-based connection status (HTTP polling system)
+      // Use heartbeat-based connection status (WebSocket system)
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stats" });
@@ -277,14 +277,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Check if indicator provides SL/TP
+        // Check if we should use TP/SL or exit on opposite signal
+        const autoCloseOnOppositeSignal = settings.autoCloseOnOppositeSignal === 'true';
         const useIndicatorLevels = signal.indicatorType && signal.entryPrice && signal.stopLoss && signal.takeProfit;
         
         let volume: number;
         let slValue: string | undefined;
         let tpValue: string | undefined;
         
-        if (useIndicatorLevels) {
+        if (autoCloseOnOppositeSignal) {
+          // Exit on opposite signal mode - NO TP/SL placed
+          console.log(`[WEBHOOK] Exit on opposite signal mode - NO TP/SL will be placed`);
+          
+          // Calculate volume based on default risk settings
+          const slPips = parseFloat(settings.defaultSlPips || '20');
+          const accountBalance = parseFloat(settings.accountBalance || '10000');
+          const riskPercentage = parseFloat(settings.riskPercentage || '1');
+          volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
+          
+          // DO NOT set TP/SL - leave as undefined
+          slValue = undefined;
+          tpValue = undefined;
+          
+          console.log(`[WEBHOOK] Volume: ${volume} lots (no TP/SL, will exit on opposite signal)`);
+        } else if (useIndicatorLevels) {
           // Use indicator-provided levels
           console.log(`[WEBHOOK] Using Target Trend indicator levels:`);
           console.log(`  Entry: ${signal.entryPrice}`);
@@ -319,7 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
           
           // Calculate absolute SL/TP prices from signal price and pip distances
-          const entryPrice = parseFloat(signal.price);
+          const entryPrice = parseFloat(signal.price || '0');
           const pipValue = getPipValue(signal.symbol);
           
           let sl: number;
@@ -356,7 +372,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Auto-close opposite positions if enabled (same symbol only)
-        const autoCloseOnOppositeSignal = settings.autoCloseOnOppositeSignal === 'true';
         if (autoCloseOnOppositeSignal) {
           const oppositeType = signal.type === 'BUY' ? 'SELL' : 'BUY';
           const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
@@ -531,175 +546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // MT5 Polling Endpoint - Get next pending command
-  app.get("/api/mt5/next-command", async (req, res) => {
-    try {
-      // Verify API secret
-      const settings = await storage.getSettings();
-      const apiSecret = req.headers['x-mt5-api-secret'] as string;
-      
-      if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
-        console.log('[MT5-POLL] Unauthorized access attempt');
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      // Update heartbeat
-      await storage.updateMt5Heartbeat();
-
-      // Get next pending command
-      const command = await storage.getNextPendingCommand();
-      
-      if (!command) {
-        // No commands - return 204 No Content (this is normal, happens every second)
-        return res.status(204).send();
-      }
-
-      // Mark as sent
-      await storage.markCommandAsSent(command.id);
-
-      console.log(`[MT5-POLL] Sending command ${command.id} to MT5: ${command.action} ${command.symbol || ''} ${command.type || ''}`);
-      if (command.stopLoss || command.takeProfit) {
-        console.log(`[MT5-POLL] SL: ${command.stopLoss}, TP: ${command.takeProfit}`);
-      }
-
-      // Return command
-      res.json({
-        id: command.id,
-        action: command.action,
-        symbol: command.symbol,
-        type: command.type,
-        volume: command.volume ? parseFloat(command.volume) : undefined,
-        stopLoss: command.stopLoss ? parseFloat(command.stopLoss) : undefined,
-        takeProfit: command.takeProfit ? parseFloat(command.takeProfit) : undefined,
-        positionId: command.positionId,
-      });
-
-      // Broadcast stats update (connection status)
-      const stats = await storage.getStats();
-      broadcast({
-        type: 'stats',
-        data: stats,
-      });
-    } catch (error) {
-      console.error('[MT5-POLL] Error:', error);
-      res.status(500).json({ error: "Failed to get next command" });
-    }
-  });
-
-  // MT5 Report Endpoint - Receive execution results
-  app.post("/api/mt5/report", async (req, res) => {
-    try {
-      // Verify API secret
-      const settings = await storage.getSettings();
-      const apiSecret = req.headers['x-mt5-api-secret'] as string;
-      
-      if (settings?.mt5ApiSecret && apiSecret !== settings.mt5ApiSecret) {
-        console.log('[MT5-REPORT] Unauthorized access attempt');
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      const { commandId, success, orderId, positionId, error: errorMessage } = req.body;
-
-      if (!commandId) {
-        console.log('[MT5-REPORT] Missing commandId in report');
-        return res.status(400).json({ error: "commandId is required" });
-      }
-
-      // Log the report for debugging
-      console.log(`[MT5-REPORT] Received - commandId: ${commandId}, success: ${success}, orderId: ${orderId || 'none'}, positionId: ${positionId || 'none'}, error: ${errorMessage || 'none'}`);
-
-      // Update heartbeat
-      await storage.updateMt5Heartbeat();
-
-      // Store execution result
-      await storage.createExecutionResult({
-        commandId,
-        success: success ? 'true' : 'false',
-        orderId: orderId || null,
-        positionId: positionId || null,
-        errorMessage: errorMessage || null,
-        responseData: JSON.stringify(req.body),
-      });
-
-      // Get the command to find associated signal
-      const command = await storage.getCommandById(commandId);
-      
-      if (!command) {
-        console.log(`[MT5-REPORT] WARNING: Command ${commandId} not found in storage`);
-        return res.json({ success: true, warning: 'Command not found' });
-      }
-
-      console.log(`[MT5-REPORT] Command ${commandId} is for signal ${command.signalId || 'none'}, action: ${command.action}`);
-
-      // Mark command as acknowledged or failed
-      if (success) {
-        await storage.markCommandAsAcknowledged(commandId);
-        console.log(`[MT5-REPORT] Command ${commandId} marked as acknowledged`);
-        
-        if (command?.signalId) {
-          await storage.updateSignalStatus(command.signalId, 'executed');
-          console.log(`[MT5-REPORT] Signal ${command.signalId} marked as executed`);
-          
-          // Create trade record
-          if (command.action === 'TRADE' && command.symbol && command.type) {
-            const trade = await storage.createTrade({
-              signalId: command.signalId,
-              symbol: command.symbol,
-              type: command.type,
-              volume: command.volume || '0.01',
-              openPrice: null,
-              stopLoss: command.stopLoss || null,
-              takeProfit: command.takeProfit || null,
-              status: 'open',
-              mt5OrderId: orderId || null,
-              mt5PositionId: positionId || null,
-            });
-            console.log(`[MT5-REPORT] Created trade record ${trade.id} for signal ${command.signalId}`);
-          }
-
-          // Broadcast updated signal
-          const updatedSignal = await storage.getSignalById(command.signalId);
-          if (updatedSignal) {
-            broadcast({
-              type: 'signal',
-              data: updatedSignal,
-            });
-          }
-        }
-      } else {
-        // Trade execution failed
-        await storage.markCommandAsFailed(commandId, errorMessage || 'Unknown error');
-        console.log(`[MT5-REPORT] Command ${commandId} marked as failed: ${errorMessage || 'Unknown error'}`);
-        
-        // Update signal status to failed
-        if (command?.signalId) {
-          await storage.updateSignalStatus(command.signalId, 'failed', errorMessage || 'Trade execution failed in MT5');
-          console.log(`[MT5-REPORT] Signal ${command.signalId} marked as failed`);
-          
-          // Broadcast updated signal with error
-          const updatedSignal = await storage.getSignalById(command.signalId);
-          if (updatedSignal) {
-            broadcast({
-              type: 'signal',
-              data: updatedSignal,
-            });
-          }
-        }
-      }
-
-      // Broadcast stats update
-      const stats = await storage.getStats();
-      broadcast({
-        type: 'stats',
-        data: stats,
-      });
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error('[MT5-REPORT] Error:', error);
-      res.status(500).json({ error: "Failed to process report" });
-    }
-  });
+  // HTTP polling endpoints removed - using WebSocket only
 
   const httpServer = createServer(app);
 
