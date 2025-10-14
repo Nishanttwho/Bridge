@@ -24,10 +24,18 @@ export function useWebSocket() {
 
         switch (message.type) {
           case 'signal':
-            // Update signals cache directly by prepending new signal
+            // Update signals cache - either update existing or add new
             queryClient.setQueryData(['/api/signals'], (old: any[] = []) => {
-              // Add new signal to the beginning, limit to 50 items
-              return [message.data, ...old].slice(0, 50);
+              const existingIndex = old.findIndex(s => s.id === message.data.id);
+              if (existingIndex >= 0) {
+                // Update existing signal
+                const updated = [...old];
+                updated[existingIndex] = message.data;
+                return updated;
+              } else {
+                // Add new signal to the beginning, limit to 50 items
+                return [message.data, ...old].slice(0, 50);
+              }
             });
             break;
 

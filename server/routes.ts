@@ -124,6 +124,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get error logs - failed signals, commands, and execution results
+  app.get("/api/error-logs", async (_req, res) => {
+    try {
+      const [failedSignals, failedCommands, failedExecutionResults] = await Promise.all([
+        storage.getFailedSignals(100),
+        storage.getFailedCommands(100),
+        storage.getFailedExecutionResults(100),
+      ]);
+
+      res.json({
+        failedSignals,
+        failedCommands,
+        failedExecutionResults,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch error logs" });
+    }
+  });
+
   // Close position endpoint
   app.post("/api/close-position", async (req, res) => {
     try {
@@ -265,7 +284,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if auto-trade is enabled
       const settings = await storage.getSettings();
+      
+      // Check MT5 connection status
+      const isMt5Connected = settings?.lastMt5Heartbeat && 
+        (Date.now() - new Date(settings.lastMt5Heartbeat).getTime() < 10000); // 10 second timeout
+      
       if (settings && settings.autoTrade === 'true') {
+        // Check if MT5 is connected
+        if (!isMt5Connected) {
+          const errorMsg = 'MT5 not connected - signal will execute when MT5 connects';
+          console.log(`[WEBHOOK] ${errorMsg}`);
+          await storage.updateSignalStatus(signal.id, 'pending', errorMsg);
+          
+          // Still broadcast the signal with error message
+          broadcast({
+            type: 'signal',
+            data: { ...signal, errorMessage: errorMsg },
+          });
+          
+          return res.json({ 
+            success: true, 
+            signalId: signal.id,
+            warning: errorMsg,
+            message: 'Signal created but pending MT5 connection'
+          });
+        }
+        
         // Validate symbol
         if (!isValidSymbol(signal.symbol)) {
           console.log(`[WEBHOOK] Invalid symbol format: ${signal.symbol}`);
@@ -427,6 +471,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           volume: tradeCommand.volume ? parseFloat(tradeCommand.volume) : undefined,
           stopLoss: tradeCommand.stopLoss ? parseFloat(tradeCommand.stopLoss) : undefined,
           takeProfit: tradeCommand.takeProfit ? parseFloat(tradeCommand.takeProfit) : undefined,
+        });
+      } else {
+        // Auto-trade is disabled
+        const errorMsg = 'Auto-trade is disabled - enable it in settings to execute trades';
+        console.log(`[WEBHOOK] ${errorMsg}`);
+        await storage.updateSignalStatus(signal.id, 'pending', errorMsg);
+        
+        // Broadcast the signal with error message
+        broadcast({
+          type: 'signal',
+          data: { ...signal, errorMessage: errorMsg },
+        });
+        
+        return res.json({ 
+          success: true, 
+          signalId: signal.id,
+          warning: errorMsg,
+          message: 'Signal created but auto-trade is disabled'
         });
       }
 
@@ -734,7 +796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update associated signal and trade
         if (command.signalId) {
           if (success && orderId) {
-            await storage.updateSignalStatus(command.signalId, 'executed');
+            await storage.updateSignalStatus(command.signalId, 'executed', null);
             
             const signal = await storage.getSignalById(command.signalId);
             if (signal && command.action === 'TRADE') {

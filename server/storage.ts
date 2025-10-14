@@ -20,7 +20,8 @@ export interface IStorage {
   createSignal(signal: InsertSignal): Promise<Signal>;
   getSignals(limit?: number): Promise<Signal[]>;
   getSignalById(id: string): Promise<Signal | undefined>;
-  updateSignalStatus(id: string, status: string, errorMessage?: string): Promise<void>;
+  updateSignalStatus(id: string, status: string, errorMessage?: string | null): Promise<void>;
+  getFailedSignals(limit?: number): Promise<Signal[]>;
   
   // Trades
   createTrade(trade: InsertTrade): Promise<Trade>;
@@ -44,9 +45,11 @@ export interface IStorage {
   markCommandAsAcknowledged(commandId: string): Promise<void>;
   markCommandAsFailed(commandId: string, errorMessage: string): Promise<void>;
   getPendingCommands(): Promise<Mt5Command[]>;
+  getFailedCommands(limit?: number): Promise<Mt5Command[]>;
   
   // MT5 Execution Results
   createExecutionResult(result: InsertMt5ExecutionResult): Promise<Mt5ExecutionResult>;
+  getFailedExecutionResults(limit?: number): Promise<Mt5ExecutionResult[]>;
   
   // Symbol Mappings
   createSymbolMapping(mapping: InsertSymbolMapping): Promise<SymbolMapping>;
@@ -107,15 +110,23 @@ export class MemStorage implements IStorage {
     return this.signals.get(id);
   }
 
-  async updateSignalStatus(id: string, status: string, errorMessage?: string): Promise<void> {
+  async updateSignalStatus(id: string, status: string, errorMessage?: string | null): Promise<void> {
     const signal = this.signals.get(id);
     if (signal) {
       signal.status = status;
-      if (errorMessage) {
+      if (errorMessage !== undefined) {
         signal.errorMessage = errorMessage;
       }
       this.signals.set(id, signal);
     }
+  }
+
+  async getFailedSignals(limit: number = 50): Promise<Signal[]> {
+    const allSignals = Array.from(this.signals.values());
+    return allSignals
+      .filter(s => s.status === 'failed')
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
   }
 
   // Trades
@@ -331,6 +342,14 @@ export class MemStorage implements IStorage {
     return allCommands.filter(c => c.status === 'pending');
   }
 
+  async getFailedCommands(limit: number = 50): Promise<Mt5Command[]> {
+    const allCommands = Array.from(this.mt5Commands.values());
+    return allCommands
+      .filter(c => c.status === 'failed' || (c.errorMessage !== null && c.errorMessage !== ''))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
   // MT5 Execution Results
   async createExecutionResult(insertResult: InsertMt5ExecutionResult): Promise<Mt5ExecutionResult> {
     const id = randomUUID();
@@ -346,6 +365,14 @@ export class MemStorage implements IStorage {
     };
     this.mt5ExecutionResults.set(id, result);
     return result;
+  }
+
+  async getFailedExecutionResults(limit: number = 50): Promise<Mt5ExecutionResult[]> {
+    const allResults = Array.from(this.mt5ExecutionResults.values());
+    return allResults
+      .filter(r => r.success === 'false' || (r.errorMessage !== null && r.errorMessage !== ''))
+      .sort((a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime())
+      .slice(0, limit);
   }
 
   // Symbol Mappings
