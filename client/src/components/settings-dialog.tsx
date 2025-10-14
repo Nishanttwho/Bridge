@@ -42,6 +42,7 @@ const settingsSchema = z.object({
   riskPercentage: z.string().min(1, "Risk percentage is required"),
   defaultTpPips: z.string().min(1, "Take profit in pips is required"),
   defaultSlPips: z.string().min(1, "Stop loss in pips is required"),
+  fixedLotSize: z.string().min(1, "Fixed lot size is required"),
   autoTrade: z.string(),
   autoCloseOnOppositeSignal: z.string(),
 });
@@ -75,6 +76,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       riskPercentage: '1',
       defaultTpPips: '30',
       defaultSlPips: '20',
+      fixedLotSize: '0.01',
       autoTrade: 'true',
       autoCloseOnOppositeSignal: 'true',
     },
@@ -88,6 +90,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         riskPercentage: settings.riskPercentage || '1',
         defaultTpPips: settings.defaultTpPips || '30',
         defaultSlPips: settings.defaultSlPips || '20',
+        fixedLotSize: settings.fixedLotSize || '0.01',
         autoTrade: settings.autoTrade || 'true',
         autoCloseOnOppositeSignal: settings.autoCloseOnOppositeSignal || 'true',
       });
@@ -102,6 +105,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         riskPercentage: data.riskPercentage,
         defaultTpPips: data.defaultTpPips,
         defaultSlPips: data.defaultSlPips,
+        fixedLotSize: data.fixedLotSize,
         autoTrade: data.autoTrade,
         autoCloseOnOppositeSignal: data.autoCloseOnOppositeSignal,
       });
@@ -430,6 +434,32 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </FormItem>
                   )}
                 />
+
+                {form.watch('autoCloseOnOppositeSignal') === 'true' && (
+                  <FormField
+                    control={form.control}
+                    name="fixedLotSize"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fixed Lot Size (for Exit on Opposite Signal mode)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01" 
+                            min="0.01"
+                            placeholder="0.01" 
+                            {...field} 
+                            data-testid="input-fixed-lot-size" 
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Fixed lot size to use when Exit on Opposite Signal is enabled (since no SL is placed, lot size cannot be calculated from risk)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               {/* Symbol Mappings */}

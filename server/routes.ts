@@ -289,17 +289,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Exit on opposite signal mode - NO TP/SL placed
           console.log(`[WEBHOOK] Exit on opposite signal mode - NO TP/SL will be placed`);
           
-          // Calculate volume based on default risk settings
-          const slPips = parseFloat(settings.defaultSlPips || '20');
-          const accountBalance = parseFloat(settings.accountBalance || '10000');
-          const riskPercentage = parseFloat(settings.riskPercentage || '1');
-          volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
+          // Use fixed lot size from settings
+          volume = parseFloat(settings.fixedLotSize || '0.01');
           
           // DO NOT set TP/SL - leave as undefined
           slValue = undefined;
           tpValue = undefined;
           
-          console.log(`[WEBHOOK] Volume: ${volume} lots (no TP/SL, will exit on opposite signal)`);
+          console.log(`[WEBHOOK] Volume: ${volume} lots (fixed lot size, no TP/SL, will exit on opposite signal)`);
         } else if (useIndicatorLevels) {
           // Use indicator-provided levels
           console.log(`[WEBHOOK] Using Target Trend indicator levels:`);
@@ -464,6 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           defaultTpPips: '30',
           defaultSlPips: '20',
           autoCloseOnOppositeSignal: 'true',
+          fixedLotSize: '0.01',
           lastMt5Heartbeat: null,
         });
         return;
