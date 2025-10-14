@@ -20,14 +20,24 @@ function broadcast(message: WSMessage) {
 }
 
 // Send command to MT5 via WebSocket
-function sendCommandToMT5(command: any) {
+// Returns true if command was sent to at least one MT5 client, false otherwise
+function sendCommandToMT5(command: any): boolean {
   const message = JSON.stringify(command);
+  let sentToAtLeastOne = false;
+  
   mt5WsClients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       console.log(`[MT5-WS] Sending command ${command.id} to MT5: ${command.action}`);
       client.send(message);
+      sentToAtLeastOne = true;
     }
   });
+  
+  if (!sentToAtLeastOne) {
+    console.log(`[MT5-WS] No connected MT5 clients - command ${command.id} will remain pending`);
+  }
+  
+  return sentToAtLeastOne;
 }
 
 // Get pip value based on symbol (handles JPY, crypto, indices, metals)
@@ -168,14 +178,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Send command to MT5 via WebSocket immediately
-      sendCommandToMT5({
+      const sent = sendCommandToMT5({
         id: command.id,
         action: 'CLOSE',
         positionId: ticket,
       });
 
-      // Mark as sent
-      await storage.markCommandAsSent(command.id);
+      // Mark as sent ONLY if it was actually sent to MT5
+      if (sent) {
+        await storage.markCommandAsSent(command.id);
+      } else {
+        console.log(`[CLOSE-POSITION] Command ${command.id} remains pending (MT5 not connected)`);
+      }
 
       console.log(`[CLOSE-POSITION] Command ${command.id} sent to MT5`);
 
@@ -452,14 +466,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[WEBHOOK] Queued close command for position ${positionId} (closing BEFORE new trade)`);
               
               // Send close command to MT5 via WebSocket (if connected)
-              sendCommandToMT5({
+              const closeSent = sendCommandToMT5({
                 id: closeCommand.id,
                 action: 'CLOSE',
                 positionId: positionId,
               });
               
-              // Mark command as sent
-              await storage.markCommandAsSent(closeCommand.id);
+              // Mark command as sent ONLY if it was actually sent to MT5
+              if (closeSent) {
+                await storage.markCommandAsSent(closeCommand.id);
+              } else {
+                console.log(`[WEBHOOK] Close command ${closeCommand.id} remains pending (MT5 not connected)`);
+              }
             }
             
             // Mark trade as closing
@@ -485,7 +503,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[WEBHOOK] Enqueued NEW ${signal.type} trade command ${tradeCommand.id} for signal ${signal.id} (after closing opposite trades)`);
         
         // Send command to MT5 via WebSocket (if connected)
-        sendCommandToMT5({
+        const tradeSent = sendCommandToMT5({
           id: tradeCommand.id,
           action: tradeCommand.action,
           symbol: tradeCommand.symbol,
@@ -495,8 +513,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           takeProfit: tradeCommand.takeProfit ? parseFloat(tradeCommand.takeProfit) : undefined,
         });
         
-        // Mark command as sent
-        await storage.markCommandAsSent(tradeCommand.id);
+        // Mark command as sent ONLY if it was actually sent to MT5
+        if (tradeSent) {
+          await storage.markCommandAsSent(tradeCommand.id);
+        } else {
+          console.log(`[WEBHOOK] Trade command ${tradeCommand.id} remains pending (MT5 not connected)`);
+        }
       } else {
         // Auto-trade is disabled
         const errorMsg = 'Auto-trade is disabled - enable it in settings to execute trades';
@@ -670,14 +692,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           // Send command to MT5 via WebSocket immediately
-          sendCommandToMT5({
+          const sent = sendCommandToMT5({
             id: command.id,
             action: 'CLOSE',
             positionId: message.ticket,
           });
 
-          // Mark as sent
-          await storage.markCommandAsSent(command.id);
+          // Mark as sent ONLY if it was actually sent to MT5
+          if (sent) {
+            await storage.markCommandAsSent(command.id);
+          } else {
+            console.log(`[CLIENT-WS] Close command ${command.id} remains pending (MT5 not connected)`);
+          }
 
           console.log(`[CLIENT-WS] Close command ${command.id} sent to MT5`);
         }
