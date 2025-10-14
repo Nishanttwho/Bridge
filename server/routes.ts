@@ -630,7 +630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         clearInterval(pingInterval);
       }
-    }, 5000); // Ping every 5 seconds
+    }, 3000); // Ping every 3 seconds for faster responsiveness
 
     // Store interval reference for cleanup
     (ws as any).pingInterval = pingInterval;

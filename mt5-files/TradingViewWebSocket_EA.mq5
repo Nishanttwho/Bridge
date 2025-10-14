@@ -45,7 +45,7 @@ int OnInit()
    ConnectWebSocket();
    
    // Set timer for heartbeat and reconnection checks
-   EventSetTimer(5);  // Check every 5 seconds
+   EventSetTimer(1);  // Check every 1 second for instant execution
    
    Print("=== EA initialized successfully! ===");
    
