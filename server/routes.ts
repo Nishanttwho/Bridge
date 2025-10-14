@@ -452,6 +452,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const profit = calculateProfit(oppositeTrade, closePrice);
             await storage.closeTrade(oppositeTrade.id, closePrice, profit);
           }
+          
+          // CRITICAL FIX: Re-check MT5 connection AFTER closing opposite trades
+          // If MT5 disconnected during the close, don't send new trade command
+          const settingsRecheck = await storage.getSettings();
+          const isMt5StillConnected = settingsRecheck?.lastMt5Heartbeat && 
+            (Date.now() - new Date(settingsRecheck.lastMt5Heartbeat).getTime() < 10000);
+          
+          if (!isMt5StillConnected) {
+            const errorMsg = 'MT5 connection lost after closing opposite trade - new trade will execute when MT5 reconnects';
+            console.log(`[WEBHOOK] ${errorMsg}`);
+            await storage.updateSignalStatus(signal.id, 'pending', errorMsg);
+            
+            // Still enqueue the command so it executes when MT5 reconnects
+            const tradeCommand = await storage.enqueueCommand({
+              action: 'TRADE',
+              symbol: signal.symbol,
+              type: signal.type,
+              volume: volume.toString(),
+              stopLoss: slValue,
+              takeProfit: tpValue,
+              signalId: signal.id,
+              status: 'pending',
+            });
+            
+            console.log(`[WEBHOOK] Trade command ${tradeCommand.id} enqueued but MT5 disconnected - will execute on reconnect`);
+            
+            broadcast({
+              type: 'signal',
+              data: { ...signal, errorMessage: errorMsg },
+            });
+            
+            return res.json({ 
+              success: true, 
+              signalId: signal.id,
+              warning: errorMsg,
+              message: 'Opposite trade closed but new trade pending MT5 reconnection'
+            });
+          }
         }
 
         // Enqueue TRADE command for MT5 to execute
@@ -705,7 +743,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Send any pending commands immediately
     const pendingCommands = await storage.getPendingCommands();
+    console.log(`[MT5-WS] Found ${pendingCommands.length} pending commands to send on reconnection`);
+    
     for (const command of pendingCommands) {
+      console.log(`[MT5-WS] Sending pending command ${command.id} (${command.action}) for signal ${command.signalId}`);
       sendCommandToMT5({
         id: command.id,
         action: command.action,
@@ -718,6 +759,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       // Mark as sent
       await storage.markCommandAsSent(command.id);
+      
+      // Update signal status to show it's being executed
+      if (command.signalId) {
+        await storage.updateSignalStatus(command.signalId, 'pending', 'Executing after MT5 reconnection');
+      }
+    }
+    
+    if (pendingCommands.length > 0) {
+      console.log(`[MT5-WS] Successfully sent ${pendingCommands.length} pending commands to MT5`);
     }
 
     // Broadcast stats update (connection status)
