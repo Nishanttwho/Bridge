@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, TrendingUp, CheckCircle2, Percent, Settings as SettingsIcon, Wallet, X, DollarSign, BookOpen } from "lucide-react";
+import { Activity, TrendingUp, CheckCircle2, Percent, Settings as SettingsIcon, Wallet, X, DollarSign, BookOpen, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import type { DashboardStats, Signal, MT5AccountInfo, MT5Position } from "@share
 
 export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [closingPositions, setClosingPositions] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   
   // Initialize WebSocket connection
@@ -36,15 +37,38 @@ export default function Dashboard() {
   });
 
   const closePosition = (ticket: string) => {
+    // Prevent duplicate close commands
+    if (closingPositions.has(ticket)) {
+      toast({
+        title: "Already closing",
+        description: "Position is already being closed",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (ws && ws.readyState === WebSocket.OPEN) {
+      // Mark position as closing
+      setClosingPositions(prev => new Set(prev).add(ticket));
+
       ws.send(JSON.stringify({
         type: 'close_position',
         ticket,
       }));
+      
       toast({
         title: "Position closing",
         description: "Close command sent to MT5",
       });
+
+      // Remove from closing state after 10 seconds (safety timeout)
+      setTimeout(() => {
+        setClosingPositions(prev => {
+          const next = new Set(prev);
+          next.delete(ticket);
+          return next;
+        });
+      }, 10000);
     } else {
       toast({
         title: "Error",
@@ -269,10 +293,15 @@ export default function Dashboard() {
                       size="icon"
                       variant="ghost"
                       onClick={() => closePosition(position.ticket)}
+                      disabled={closingPositions.has(position.ticket)}
                       className="ml-4"
                       data-testid={`button-close-${position.ticket}`}
                     >
-                      <X className="h-4 w-4" />
+                      {closingPositions.has(position.ticket) ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 ))}
