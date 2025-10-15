@@ -593,6 +593,92 @@ double GetPipValue(string symbol)
 }
 
 //+------------------------------------------------------------------+
+//| Count open positions for symbol                                  |
+//+------------------------------------------------------------------+
+int CountPositionsForSymbol(string symbol)
+{
+   int count = 0;
+   int totalPositions = PositionsTotal();
+   
+   for(int i = 0; i < totalPositions; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0)
+      {
+         string posSymbol = PositionGetString(POSITION_SYMBOL);
+         if(posSymbol == symbol)
+            count++;
+      }
+   }
+   
+   return count;
+}
+
+//+------------------------------------------------------------------+
+//| Close opposite positions for symbol                              |
+//+------------------------------------------------------------------+
+void CloseOppositePositions(string symbol, string tradeType)
+{
+   Print("[HEDGING] Checking for opposite positions to close - Symbol: ", symbol, ", New trade type: ", tradeType);
+   
+   int totalPositions = PositionsTotal();
+   int closedCount = 0;
+   
+   for(int i = totalPositions - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0)
+      {
+         string posSymbol = PositionGetString(POSITION_SYMBOL);
+         long posType = PositionGetInteger(POSITION_TYPE);
+         
+         if(posSymbol == symbol)
+         {
+            bool isOpposite = false;
+            
+            if(tradeType == "BUY" && posType == POSITION_TYPE_SELL)
+               isOpposite = true;
+            else if(tradeType == "SELL" && posType == POSITION_TYPE_BUY)
+               isOpposite = true;
+            
+            if(isOpposite)
+            {
+               Print("[HEDGING] Closing opposite position: ", ticket, " (", (posType == POSITION_TYPE_BUY ? "BUY" : "SELL"), ")");
+               
+               MqlTradeRequest request = {};
+               MqlTradeResult result = {};
+               
+               request.action = TRADE_ACTION_DEAL;
+               request.position = ticket;
+               request.symbol = posSymbol;
+               request.volume = PositionGetDouble(POSITION_VOLUME);
+               request.type = (posType == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+               request.price = (request.type == ORDER_TYPE_SELL) ? SymbolInfoDouble(posSymbol, SYMBOL_BID) : SymbolInfoDouble(posSymbol, SYMBOL_ASK);
+               request.deviation = 10;
+               request.magic = 123456;
+               request.type_filling = brokerFillingMode;
+               
+               if(OrderSend(request, result))
+               {
+                  Print("[HEDGING] Successfully closed position: ", ticket);
+                  closedCount++;
+               }
+               else
+               {
+                  Print("[HEDGING ERROR] Failed to close position: ", ticket, ", Error: ", GetLastError());
+               }
+            }
+         }
+      }
+   }
+   
+   if(closedCount > 0)
+      Print("[HEDGING] Closed ", closedCount, " opposite position(s) for ", symbol);
+   else
+      Print("[HEDGING] No opposite positions found for ", symbol);
+}
+
+//+------------------------------------------------------------------+
 //| Execute trade                                                     |
 //+------------------------------------------------------------------+
 void ExecuteTrade(string commandId, string commandJson)
@@ -618,6 +704,27 @@ void ExecuteTrade(string commandId, string commandJson)
       return;
    }
    
+   // HEDGING: Close opposite positions if enabled
+   if(Hedging)
+   {
+      Print("[HEDGING] Hedging is ENABLED - checking for opposite positions");
+      CloseOppositePositions(symbol, type);
+   }
+   else
+   {
+      Print("[HEDGING] Hedging is DISABLED - keeping opposite positions");
+   }
+   
+   // PYRAMIDING: Check max positions per symbol
+   int currentPositions = CountPositionsForSymbol(symbol);
+   if(currentPositions >= Pyramiding)
+   {
+      string error = "Max positions reached for " + symbol + " (limit: " + IntegerToString(Pyramiding) + ")";
+      Print("[PYRAMIDING] ", error);
+      SendReport(commandId, false, "", "", error);
+      return;
+   }
+   
    volume = NormalizeVolume(symbol, volume);
    if(volume <= 0)
    {
@@ -625,18 +732,32 @@ void ExecuteTrade(string commandId, string commandJson)
       return;
    }
    
-   // Normalize SL/TP prices to symbol's tick size
-   if(stopLoss > 0)
-      stopLoss = NormalizePrice(symbol, stopLoss);
-   if(takeProfit > 0)
-      takeProfit = NormalizePrice(symbol, takeProfit);
-   
    // Get current market price for execution
    double currentPrice;
    if(type == "BUY")
       currentPrice = SymbolInfoDouble(symbol, SYMBOL_ASK);
    else
       currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
+   
+   // STOP LOSS: Override with EA settings if enabled
+   if(EnableStopLoss && StopLossPips > 0)
+   {
+      double pipValue = GetPipValue(symbol);
+      double slDistance = StopLossPips * pipValue;
+      
+      if(type == "BUY")
+         stopLoss = currentPrice - slDistance;
+      else
+         stopLoss = currentPrice + slDistance;
+      
+      Print("[STOP LOSS] EA SL enabled - calculated SL: ", stopLoss, " (", StopLossPips, " pips)");
+   }
+   
+   // Normalize SL/TP prices to symbol's tick size
+   if(stopLoss > 0)
+      stopLoss = NormalizePrice(symbol, stopLoss);
+   if(takeProfit > 0)
+      takeProfit = NormalizePrice(symbol, takeProfit);
    
    Print("[TRADE] Current market price: ", currentPrice, ", Normalized SL: ", stopLoss, ", TP: ", takeProfit);
    
