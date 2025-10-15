@@ -12,6 +12,14 @@ input string ServerURL = "wss://your-replit-app.replit.dev";  // WebSocket serve
 input string ApiSecret = "your-secret-key-here";   // API secret for authentication
 input double MaxSlippagePercent = 0.5;             // Max slippage as % of entry price
 
+// Hedging settings
+input bool Hedging = true;                         // Enable hedging (close opposite positions)
+input int Pyramiding = 1;                          // Max positions per symbol
+
+// Stop Loss settings
+input bool EnableStopLoss = true;                  // Enable stop loss
+input double StopLossPips = 20;                    // Stop loss in pips (0 = use server SL)
+
 // Global variables
 string wsHost;
 int wsPort;
