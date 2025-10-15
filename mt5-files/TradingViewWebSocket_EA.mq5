@@ -20,6 +20,13 @@ input int Pyramiding = 1;                          // Max positions per symbol
 input bool EnableStopLoss = true;                  // Enable stop loss
 input double StopLossPips = 20;                    // Stop loss in pips (0 = use server SL)
 
+// Take Profit settings
+input bool EnableTakeProfit = false;               // Enable take profit
+input double TakeProfitPips = 30;                  // Take profit in pips (0 = no TP)
+
+// Lot Size settings
+input double FixedLotSize = 0.01;                  // Fixed lot size for all trades
+
 // Global variables
 string wsHost;
 int wsPort;
@@ -692,12 +699,16 @@ void ExecuteTrade(string commandId, string commandJson)
 {
    string symbol = GetJsonValue(commandJson, "symbol");
    string type = GetJsonValue(commandJson, "type");
-   double volume = StringToDouble(GetJsonValue(commandJson, "volume"));
+   double serverVolume = StringToDouble(GetJsonValue(commandJson, "volume"));
    double stopLoss = StringToDouble(GetJsonValue(commandJson, "stopLoss"));
    double takeProfit = StringToDouble(GetJsonValue(commandJson, "takeProfit"));
    
-   Print("[TRADE] Received command - Symbol: ", symbol, ", Type: ", type, ", Volume: ", volume);
-   Print("[TRADE] SL: ", stopLoss, ", TP: ", takeProfit);
+   // Use EA's FixedLotSize instead of server volume
+   double volume = FixedLotSize;
+   
+   Print("[TRADE] Received command - Symbol: ", symbol, ", Type: ", type);
+   Print("[TRADE] Server volume: ", serverVolume, ", Using EA FixedLotSize: ", volume);
+   Print("[TRADE] Server SL: ", stopLoss, ", Server TP: ", takeProfit);
    
    if(symbol == "" || type == "")
    {
@@ -712,6 +723,9 @@ void ExecuteTrade(string commandId, string commandJson)
    }
    
    // HEDGING: Close opposite positions if enabled
+   // NOTE: This provides "close on opposite signal" functionality when both SL and TP are disabled
+   // When EnableStopLoss=false and EnableTakeProfit=false, positions stay open until an opposite signal arrives
+   // The hedging mechanism then closes the existing position before opening the new opposite trade
    if(Hedging)
    {
       Print("[HEDGING] Hedging is ENABLED - checking for opposite positions");
@@ -746,10 +760,14 @@ void ExecuteTrade(string commandId, string commandJson)
    else
       currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
    
-   // STOP LOSS: Override with EA settings if enabled
+   // STOP LOSS & TAKE PROFIT: Apply EA settings based on enable flags
+   // CRITICAL: When EA flags are disabled, preserve server/indicator-provided SL/TP
+   double pipValue = GetPipValue(symbol);
+   
+   // Handle Stop Loss
    if(EnableStopLoss && StopLossPips > 0)
    {
-      double pipValue = GetPipValue(symbol);
+      // EA override: calculate SL from EA settings
       double slDistance = StopLossPips * pipValue;
       
       if(type == "BUY")
@@ -757,7 +775,37 @@ void ExecuteTrade(string commandId, string commandJson)
       else
          stopLoss = currentPrice + slDistance;
       
-      Print("[STOP LOSS] EA SL enabled - calculated SL: ", stopLoss, " (", StopLossPips, " pips)");
+      Print("[STOP LOSS] EA SL enabled - calculated SL: ", stopLoss, " (", StopLossPips, " pips), overriding server SL");
+   }
+   else
+   {
+      // EA disabled: use server-provided SL (from indicator or server settings)
+      if(stopLoss > 0)
+         Print("[STOP LOSS] EA SL disabled - using server/indicator SL: ", stopLoss);
+      else
+         Print("[STOP LOSS] EA SL disabled and no server SL - no stop loss will be set");
+   }
+   
+   // Handle Take Profit
+   if(EnableTakeProfit && TakeProfitPips > 0)
+   {
+      // EA override: calculate TP from EA settings
+      double tpDistance = TakeProfitPips * pipValue;
+      
+      if(type == "BUY")
+         takeProfit = currentPrice + tpDistance;
+      else
+         takeProfit = currentPrice - tpDistance;
+      
+      Print("[TAKE PROFIT] EA TP enabled - calculated TP: ", takeProfit, " (", TakeProfitPips, " pips), overriding server TP");
+   }
+   else
+   {
+      // EA disabled: use server-provided TP (from indicator or server settings)
+      if(takeProfit > 0)
+         Print("[TAKE PROFIT] EA TP disabled - using server/indicator TP: ", takeProfit);
+      else
+         Print("[TAKE PROFIT] EA TP disabled and no server TP - no take profit will be set");
    }
    
    // Normalize SL/TP prices to symbol's tick size
@@ -766,12 +814,12 @@ void ExecuteTrade(string commandId, string commandJson)
    if(takeProfit > 0)
       takeProfit = NormalizePrice(symbol, takeProfit);
    
-   Print("[TRADE] Current market price: ", currentPrice, ", Normalized SL: ", stopLoss, ", TP: ", takeProfit);
+   Print("[TRADE] Current market price: ", currentPrice, ", Final SL: ", (stopLoss > 0 ? DoubleToString(stopLoss) : "None"), ", Final TP: ", (takeProfit > 0 ? DoubleToString(takeProfit) : "None"));
    
-   // Validate SL/TP
+   // Validate SL/TP (only if they are set)
    if(type == "BUY")
    {
-      if(stopLoss >= currentPrice)
+      if(stopLoss > 0 && stopLoss >= currentPrice)
       {
          SendReport(commandId, false, "", "", "Invalid SL for BUY");
          return;
@@ -784,12 +832,12 @@ void ExecuteTrade(string commandId, string commandJson)
    }
    else
    {
-      if(stopLoss <= currentPrice && stopLoss > 0)
+      if(stopLoss > 0 && stopLoss <= currentPrice)
       {
          SendReport(commandId, false, "", "", "Invalid SL for SELL");
          return;
       }
-      if(takeProfit >= currentPrice)
+      if(takeProfit > 0 && takeProfit >= currentPrice)
       {
          SendReport(commandId, false, "", "", "Invalid TP for SELL");
          return;

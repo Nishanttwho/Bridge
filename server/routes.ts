@@ -343,7 +343,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Determine how to calculate lot size and TP/SL
+        // Calculate lot size and prepare SL/TP for EA
+        // EA will use these values only when its enable flags are disabled
+        // When EA's EnableStopLoss or EnableTakeProfit are true, EA overrides these values
         const useIndicatorLevels = signal.indicatorType && signal.entryPrice && signal.stopLoss && signal.takeProfit;
         
         let volume: number;
@@ -357,52 +359,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`  SL: ${signal.stopLoss}`);
           console.log(`  TP: ${signal.takeProfit}`);
           
-          // Calculate risk in pips from indicator SL
-          const entry = parseFloat(signal.entryPrice!);
-          const sl = parseFloat(signal.stopLoss!);
-          const pipValue = getPipValue(signal.symbol);
-          const slDistance = Math.abs(entry - sl);
-          const slPips = slDistance / pipValue;
+          // Use a default volume - EA will handle lot sizing with its FixedLotSize input
+          volume = 0.01; // Default minimal volume, EA will override with its FixedLotSize setting
           
-          // Calculate lot size based on risk
-          const accountBalance = parseFloat(settings.accountBalance || '10000');
-          const riskPercentage = parseFloat(settings.riskPercentage || '1');
-          volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
-          
-          // Use absolute price levels from indicator
+          // Send indicator SL/TP to EA (EA will use these if its enable flags are disabled)
           slValue = signal.stopLoss!;
           tpValue = signal.takeProfit!;
           
-          console.log(`  Calculated volume: ${volume} lots (${slPips.toFixed(1)} pips risk)`);
+          console.log(`  Using default volume: ${volume} lots (EA will use its FixedLotSize)`);
+          console.log(`  Sending SL: ${slValue}, TP: ${tpValue} to EA (EA may override based on its settings)`);
         } else {
-          // Use pip-based settings (calculate absolute prices from pips)
-          const slPips = parseFloat(settings.defaultSlPips || '20');
-          const tpPips = parseFloat(settings.defaultTpPips || '30');
-          const accountBalance = parseFloat(settings.accountBalance || '10000');
-          const riskPercentage = parseFloat(settings.riskPercentage || '1');
-          
-          console.log(`[WEBHOOK] Using pip-based settings - SL: ${slPips} pips, TP: ${tpPips} pips`);
-          volume = parseFloat(calculateLotSize(accountBalance, riskPercentage, slPips));
-          
-          // Calculate absolute SL/TP prices from signal price and pip distances
-          const entryPrice = parseFloat(signal.price || '0');
-          const pipValue = getPipValue(signal.symbol);
-          
-          let sl: number;
-          let tp: number;
-          
-          if (signal.type === 'BUY') {
-            sl = entryPrice - (slPips * pipValue);
-            tp = entryPrice + (tpPips * pipValue);
-          } else {
-            sl = entryPrice + (slPips * pipValue);
-            tp = entryPrice - (tpPips * pipValue);
-          }
-          
-          slValue = sl.toFixed(5);
-          tpValue = tp.toFixed(5);
-          
-          console.log(`[WEBHOOK] Calculated absolute prices - Entry: ${entryPrice}, SL: ${slValue}, TP: ${tpValue}`);
+          // Use default volume - EA will handle lot sizing with its FixedLotSize input
+          volume = 0.01;
+          console.log(`[WEBHOOK] Using default volume: ${volume} lots (EA will use its FixedLotSize)`);
+          console.log(`  No SL/TP from indicator - EA will use its own settings if enabled`);
         }
 
         // CRITICAL FIX 3: Update signal status to 'pending' BEFORE enqueueing command
@@ -423,14 +393,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // NOTE: Hedging (closing opposite positions) is now handled by the EA itself
         // The dashboard only sends trade signals - the EA decides whether to close opposite positions
+        // SL/TP are handled entirely by the EA via its input parameters - we don't send them from server
         // Enqueue TRADE command for MT5 to execute
         const tradeCommand = await storage.enqueueCommand({
           action: 'TRADE',
           symbol: signal.symbol,
           type: signal.type,
           volume: volume.toString(),
-          stopLoss: slValue,
-          takeProfit: tpValue,
+          stopLoss: undefined, // EA handles SL via its EnableStopLoss and StopLossPips inputs
+          takeProfit: undefined, // EA handles TP via its EnableTakeProfit and TakeProfitPips inputs
           signalId: signal.id,
           status: 'pending',
         });

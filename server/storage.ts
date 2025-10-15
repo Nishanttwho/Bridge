@@ -199,12 +199,7 @@ export class MemStorage implements IStorage {
         id: 'default',
         mt5ApiSecret: null,
         accountBalance: '10000',
-        riskPercentage: '1',
-        defaultTpPips: '30',
-        defaultSlPips: '20',
         autoTrade: 'true',
-        autoCloseOnOppositeSignal: 'true',
-        fixedLotSize: '0.01',
         lastMt5Heartbeat: null,
       };
     }
@@ -218,12 +213,7 @@ export class MemStorage implements IStorage {
       id,
       mt5ApiSecret: insertSettings.mt5ApiSecret ?? null,
       accountBalance: insertSettings.accountBalance || '10000',
-      riskPercentage: insertSettings.riskPercentage || '1',
-      defaultTpPips: insertSettings.defaultTpPips || '30',
-      defaultSlPips: insertSettings.defaultSlPips || '20',
-      fixedLotSize: insertSettings.fixedLotSize || '0.01',
       autoTrade: insertSettings.autoTrade || 'true',
-      autoCloseOnOppositeSignal: insertSettings.autoCloseOnOppositeSignal || 'true',
       lastMt5Heartbeat: this.settings?.lastMt5Heartbeat ?? null,
     };
     this.settings = settings;
@@ -237,12 +227,7 @@ export class MemStorage implements IStorage {
         id: 'default',
         mt5ApiSecret: null,
         accountBalance: '10000',
-        riskPercentage: '1',
-        defaultTpPips: '30',
-        defaultSlPips: '20',
         autoTrade: 'true',
-        autoCloseOnOppositeSignal: 'true',
-        fixedLotSize: '0.01',
         lastMt5Heartbeat: new Date(),
       };
     } else {

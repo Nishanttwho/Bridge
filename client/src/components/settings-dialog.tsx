@@ -39,10 +39,6 @@ import {
 const settingsSchema = z.object({
   mt5ApiSecret: z.string().min(1, "MT5 API Secret is required"),
   accountBalance: z.string().min(1, "Account balance is required"),
-  riskPercentage: z.string().min(1, "Risk percentage is required"),
-  defaultTpPips: z.string().min(1, "Take profit in pips is required"),
-  defaultSlPips: z.string().min(1, "Stop loss in pips is required"),
-  fixedLotSize: z.string().min(1, "Fixed lot size is required"),
   autoTrade: z.string(),
 });
 
@@ -72,10 +68,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     defaultValues: {
       mt5ApiSecret: '',
       accountBalance: '10000',
-      riskPercentage: '1',
-      defaultTpPips: '30',
-      defaultSlPips: '20',
-      fixedLotSize: '0.01',
       autoTrade: 'true',
     },
   });
@@ -85,10 +77,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       form.reset({
         mt5ApiSecret: settings.mt5ApiSecret || '',
         accountBalance: settings.accountBalance || '10000',
-        riskPercentage: settings.riskPercentage || '1',
-        defaultTpPips: settings.defaultTpPips || '30',
-        defaultSlPips: settings.defaultSlPips || '20',
-        fixedLotSize: settings.fixedLotSize || '0.01',
         autoTrade: settings.autoTrade || 'true',
       });
     }
@@ -99,10 +87,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       return apiRequest('POST', '/api/settings', {
         mt5ApiSecret: data.mt5ApiSecret,
         accountBalance: data.accountBalance,
-        riskPercentage: data.riskPercentage,
-        defaultTpPips: data.defaultTpPips,
-        defaultSlPips: data.defaultSlPips,
-        fixedLotSize: data.fixedLotSize,
         autoTrade: data.autoTrade,
       });
     },
@@ -317,73 +301,25 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold">Trading Parameters</h3>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="accountBalance"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Account Balance ($)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" min="0" {...field} data-testid="input-account-balance" />
-                        </FormControl>
-                        <FormDescription>Your account balance for risk calculation</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="accountBalance"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Balance ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" {...field} data-testid="input-account-balance" />
+                      </FormControl>
+                      <FormDescription>Your MT5 account balance for monitoring</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                  <FormField
-                    control={form.control}
-                    name="riskPercentage"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Risk Per Trade (%)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" min="0.1" max="100" {...field} data-testid="input-risk-percentage" />
-                        </FormControl>
-                        <FormDescription>Percentage of account to risk per trade</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="defaultSlPips"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Default Stop Loss (Pips)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" min="0.1" {...field} data-testid="input-default-sl-pips" />
-                        </FormControl>
-                        <FormDescription>Used only when "Exit on Opposite Signal" is disabled</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="defaultTpPips"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Default Take Profit (Pips)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" min="0.1" {...field} data-testid="input-default-tp-pips" />
-                        </FormControl>
-                        <FormDescription>Used only when "Exit on Opposite Signal" is disabled</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="rounded-lg border border-muted bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground">
-                    ℹ️ Lot size is automatically calculated based on your risk percentage and stop loss pips
+                <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-3">
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    ℹ️ <strong>Trading Parameters</strong> (Stop Loss, Take Profit, and Lot Size) are now configured directly in the MT5 Expert Advisor settings. 
+                    You can enable/disable SL and TP independently, set their pip values, and configure your fixed lot size in the EA inputs.
                   </p>
                 </div>
 
@@ -409,29 +345,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="fixedLotSize"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fixed Lot Size</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          min="0.01"
-                          placeholder="0.01" 
-                          {...field} 
-                          data-testid="input-fixed-lot-size" 
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Fallback lot size when risk calculation is not possible (e.g., when indicator doesn't provide SL)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
 
               {/* Symbol Mappings */}
