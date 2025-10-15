@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+!mt5-files/*.md
+dist
+.env
+.DS_Store
+.vscode
+.idea
+coverage
+.nyc_output
