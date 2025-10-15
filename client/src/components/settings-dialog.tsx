@@ -44,7 +44,6 @@ const settingsSchema = z.object({
   defaultSlPips: z.string().min(1, "Stop loss in pips is required"),
   fixedLotSize: z.string().min(1, "Fixed lot size is required"),
   autoTrade: z.string(),
-  autoCloseOnOppositeSignal: z.string(),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -78,7 +77,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       defaultSlPips: '20',
       fixedLotSize: '0.01',
       autoTrade: 'true',
-      autoCloseOnOppositeSignal: 'true',
     },
   });
 
@@ -92,7 +90,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         defaultSlPips: settings.defaultSlPips || '20',
         fixedLotSize: settings.fixedLotSize || '0.01',
         autoTrade: settings.autoTrade || 'true',
-        autoCloseOnOppositeSignal: settings.autoCloseOnOppositeSignal || 'true',
       });
     }
   }, [settings, form]);
@@ -107,7 +104,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         defaultSlPips: data.defaultSlPips,
         fixedLotSize: data.fixedLotSize,
         autoTrade: data.autoTrade,
-        autoCloseOnOppositeSignal: data.autoCloseOnOppositeSignal,
       });
     },
     onSuccess: () => {
@@ -415,51 +411,27 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
                 <FormField
                   control={form.control}
-                  name="autoCloseOnOppositeSignal"
+                  name="fixedLotSize"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border border-border bg-card p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Exit on Opposite Signal</FormLabel>
-                        <FormDescription>
-                          When enabled: Exit trades only when opposite signal arrives (NO TP/SL placed). When disabled: Use TP/SL settings above
-                        </FormDescription>
-                      </div>
+                    <FormItem>
+                      <FormLabel>Fixed Lot Size</FormLabel>
                       <FormControl>
-                        <Switch
-                          checked={field.value === 'true'}
-                          onCheckedChange={(checked) => field.onChange(checked ? 'true' : 'false')}
-                          data-testid="switch-auto-close-opposite"
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          min="0.01"
+                          placeholder="0.01" 
+                          {...field} 
+                          data-testid="input-fixed-lot-size" 
                         />
                       </FormControl>
+                      <FormDescription>
+                        Fallback lot size when risk calculation is not possible (e.g., when indicator doesn't provide SL)
+                      </FormDescription>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                {form.watch('autoCloseOnOppositeSignal') === 'true' && (
-                  <FormField
-                    control={form.control}
-                    name="fixedLotSize"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Fixed Lot Size (for Exit on Opposite Signal mode)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            min="0.01"
-                            placeholder="0.01" 
-                            {...field} 
-                            data-testid="input-fixed-lot-size" 
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Fixed lot size to use when Exit on Opposite Signal is enabled (since no SL is placed, lot size cannot be calculated from risk)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
               </div>
 
               {/* Symbol Mappings */}
