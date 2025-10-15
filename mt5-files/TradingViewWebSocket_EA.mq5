@@ -603,7 +603,7 @@ int CountPositionsForSymbol(string symbol)
    for(int i = 0; i < totalPositions; i++)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0)
+      if(ticket > 0 && PositionSelectByTicket(ticket))
       {
          string posSymbol = PositionGetString(POSITION_SYMBOL);
          if(posSymbol == symbol)
@@ -627,7 +627,7 @@ void CloseOppositePositions(string symbol, string tradeType)
    for(int i = totalPositions - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket > 0)
+      if(ticket > 0 && PositionSelectByTicket(ticket))
       {
          string posSymbol = PositionGetString(POSITION_SYMBOL);
          long posType = PositionGetInteger(POSITION_TYPE);
@@ -660,8 +660,15 @@ void CloseOppositePositions(string symbol, string tradeType)
                
                if(OrderSend(request, result))
                {
-                  Print("[HEDGING] Successfully closed position: ", ticket);
-                  closedCount++;
+                  if(result.retcode == TRADE_RETCODE_DONE)
+                  {
+                     Print("[HEDGING] Successfully closed position: ", ticket, ", retcode: ", result.retcode);
+                     closedCount++;
+                  }
+                  else
+                  {
+                     Print("[HEDGING ERROR] Close rejected for position: ", ticket, ", retcode: ", result.retcode);
+                  }
                }
                else
                {
