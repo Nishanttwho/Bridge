@@ -343,27 +343,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Check if we should use TP/SL or exit on opposite signal
-        const autoCloseOnOppositeSignal = settings.autoCloseOnOppositeSignal === 'true';
+        // Determine how to calculate lot size and TP/SL
         const useIndicatorLevels = signal.indicatorType && signal.entryPrice && signal.stopLoss && signal.takeProfit;
         
         let volume: number;
         let slValue: string | undefined;
         let tpValue: string | undefined;
         
-        if (autoCloseOnOppositeSignal) {
-          // Exit on opposite signal mode - NO TP/SL placed
-          console.log(`[WEBHOOK] Exit on opposite signal mode - NO TP/SL will be placed`);
-          
-          // Use fixed lot size from settings
-          volume = parseFloat(settings.fixedLotSize || '0.01');
-          
-          // DO NOT set TP/SL - leave as undefined
-          slValue = undefined;
-          tpValue = undefined;
-          
-          console.log(`[WEBHOOK] Volume: ${volume} lots (fixed lot size, no TP/SL, will exit on opposite signal)`);
-        } else if (useIndicatorLevels) {
+        if (useIndicatorLevels) {
           // Use indicator-provided levels
           console.log(`[WEBHOOK] Using Target Trend indicator levels:`);
           console.log(`  Entry: ${signal.entryPrice}`);
@@ -434,60 +421,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // CRITICAL FIX: Close opposite trades FIRST, then open new trade
-        // This is the correct flow for the trading strategy
-        
-        // Step 1: Auto-close opposite positions if enabled (BEFORE opening new trade)
-        if (autoCloseOnOppositeSignal) {
-          const oppositeType = signal.type === 'BUY' ? 'SELL' : 'BUY';
-          const oppositeTrades = await storage.getOpenTradesByType(oppositeType);
-          
-          // Filter to only close trades for the SAME symbol (using symbol equivalence check)
-          // This handles cases where old trades have unmapped symbols (e.g., "BTCUSD") 
-          // while new signals have mapped symbols (e.g., "BTCUSDm")
-          const oppositeTradesForSymbol = [];
-          for (const trade of oppositeTrades) {
-            if (await storage.areSymbolsEquivalent(trade.symbol, signal.symbol)) {
-              oppositeTradesForSymbol.push(trade);
-            }
-          }
-          
-          console.log(`[WEBHOOK] Found ${oppositeTradesForSymbol.length} opposite ${oppositeType} trades to close BEFORE opening new ${signal.type} trade`);
-          
-          for (const oppositeTrade of oppositeTradesForSymbol) {
-            const positionId = oppositeTrade.mt5PositionId || oppositeTrade.mt5OrderId;
-            if (positionId) {
-              // Queue close command
-              const closeCommand = await storage.enqueueCommand({
-                action: 'CLOSE',
-                positionId: positionId,
-                status: 'pending',
-              });
-              console.log(`[WEBHOOK] Queued close command for position ${positionId} (closing BEFORE new trade)`);
-              
-              // Send close command to MT5 via WebSocket (if connected)
-              const closeSent = sendCommandToMT5({
-                id: closeCommand.id,
-                action: 'CLOSE',
-                positionId: positionId,
-              });
-              
-              // Mark command as sent ONLY if it was actually sent to MT5
-              if (closeSent) {
-                await storage.markCommandAsSent(closeCommand.id);
-              } else {
-                console.log(`[WEBHOOK] Close command ${closeCommand.id} remains pending (MT5 not connected)`);
-              }
-            }
-            
-            // Mark trade as closing
-            const closePrice = signal.price || oppositeTrade.openPrice || '0';
-            const profit = calculateProfit(oppositeTrade, closePrice);
-            await storage.closeTrade(oppositeTrade.id, closePrice, profit);
-          }
-        }
-        
-        // Step 2: NOW open the new trade (after opposite trades are closed)
+        // NOTE: Hedging (closing opposite positions) is now handled by the EA itself
+        // The dashboard only sends trade signals - the EA decides whether to close opposite positions
         // Enqueue TRADE command for MT5 to execute
         const tradeCommand = await storage.enqueueCommand({
           action: 'TRADE',
@@ -569,7 +504,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           autoTrade: 'true',
           defaultTpPips: '30',
           defaultSlPips: '20',
-          autoCloseOnOppositeSignal: 'true',
           fixedLotSize: '0.01',
           lastMt5Heartbeat: null,
         });

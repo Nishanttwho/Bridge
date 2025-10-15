@@ -79,8 +79,7 @@ export const settings = pgTable("settings", {
   autoTrade: text("auto_trade").notNull().default('true'), // 'true' | 'false'
   defaultTpPips: decimal("default_tp_pips", { precision: 10, scale: 2 }).notNull().default('30'), // Default take profit in pips
   defaultSlPips: decimal("default_sl_pips", { precision: 10, scale: 2 }).notNull().default('20'), // Default stop loss in pips
-  autoCloseOnOppositeSignal: text("auto_close_on_opposite_signal").notNull().default('true'), // 'true' | 'false' - Close positions when opposite signal comes
-  fixedLotSize: decimal("fixed_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'), // Fixed lot size for exit on opposite signal mode
+  fixedLotSize: decimal("fixed_lot_size", { precision: 10, scale: 2 }).notNull().default('0.01'), // Fixed lot size (used when indicator doesn't provide SL)
   lastMt5Heartbeat: timestamp("last_mt5_heartbeat"), // Last time MT5 polled
 });
 
@@ -113,7 +112,6 @@ export const insertSettingsSchema = createInsertSchema(settings).omit({
   defaultSlPips: z.coerce.number().positive("Stop loss must be positive").transform(val => val.toString()),
   fixedLotSize: z.coerce.number().positive("Fixed lot size must be positive").transform(val => val.toString()),
   autoTrade: z.string().optional().default('true'),
-  autoCloseOnOppositeSignal: z.string().optional().default('true'),
   mt5ApiSecret: z.string().optional(),
 });
 
