@@ -17,24 +17,27 @@ The user interface features a professional fintech dashboard with a default dark
 
 ### Technical Implementations
 The application consists of a React and TypeScript frontend and an Express and TypeScript backend.
--   **Frontend**: Provides a real-time dashboard, a signals table for live monitoring, and a settings panel for MT5 configuration. It integrates with WebSockets for real-time data updates.
--   **Backend**: Features a webhook endpoint for receiving TradingView alerts, a WebSocket server for broadcasting updates, and a direct WebSocket-based communication with MT5 for instant trade execution. In-memory storage is used for fast signal and trade tracking.
--   **Data Models**: Includes `Signal` (TradingView alert with type, symbol, price, status, and optional indicator fields), `Trade` (MT5 execution record with P/L), and `Settings` (MT5 credentials and trading parameters).
+-   **Frontend**: Provides a real-time dashboard, a signals table for live monitoring, and a minimal settings panel for MT5 API secret and auto-trade toggle. All trading parameters (SL/TP/Lot Size) are configured directly in the EA. It integrates with WebSockets for real-time data updates.
+-   **Backend**: Features a webhook endpoint for receiving TradingView alerts, a WebSocket server for broadcasting updates, and a direct WebSocket-based communication with MT5 for instant trade execution. In-memory storage is used for fast signal and trade tracking. Server forwards minimal volume (0.01) and indicator-provided SL/TP to EA, letting EA make final decisions.
+-   **Data Models**: Includes `Signal` (TradingView alert with type, symbol, price, status, and optional indicator fields), `Trade` (MT5 execution record with P/L), and `Settings` (MT5 API secret, account balance for monitoring, and auto-trade flag).
 
 ### Feature Specifications
 -   **Real-time Signal Reception**: Processes TradingView webhooks for immediate signal intake.
 -   **Automated Trade Execution**: Automatically executes trades in MT5 based on received signals.
 -   **Live Dashboard**: Displays connection status, real-time statistics, and success rates.
--   **Configurable Trading Parameters**: Allows users to set lot size, spread, slippage limits, and toggle auto-trading.
+-   **Minimal Dashboard Settings**: Dashboard only configures MT5 API secret and auto-trade toggle. All trading parameters managed via EA inputs.
+-   **EA-Controlled Trading Parameters** (January 2025):
+    -   **Stop Loss**: `EnableStopLoss` (bool) and `StopLossPips` (double) - When enabled, EA calculates and overrides SL; when disabled, uses indicator-provided SL if available
+    -   **Take Profit**: `EnableTakeProfit` (bool) and `TakeProfitPips` (double) - When enabled, EA calculates and overrides TP; when disabled, uses indicator-provided TP if available
+    -   **Lot Size**: `FixedLotSize` (double, default: 0.01) - EA always uses this value, ignoring server volume
+    -   **Hedging**: Automatically closes opposite positions before opening new trades (configurable via `EnableHedging`)
+    -   **Pyramiding Control**: `MaxPositionsPerSymbol` limits concurrent positions per symbol
 -   **Flexible Exit Strategies**:
-    -   **Exit on Opposite Signal**: Trades close automatically upon receiving an opposite signal, without predefined TP/SL.
-    -   **TP/SL Mode**: Uses configurable Take Profit (TP) and Stop Loss (SL) distances in pips.
--   **Target Trend Indicator Support**: Accepts entry, SL, and TP levels directly from TradingView indicators, with a fallback to pip-based settings if not provided.
--   **EA-Level Hedging & Risk Management** (January 2025):
-    -   **Hedging**: Automatically closes opposite positions before opening new trades (configurable via EA input)
-    -   **Pyramiding Control**: Limits maximum positions per symbol (default: 1)
-    -   **Stop Loss Override**: EA-level stop loss in pips that overrides server settings when enabled
-    -   All features configurable directly in MT5 EA settings without dashboard modifications
+    -   **Exit on Opposite Signal**: When both `EnableStopLoss=false` and `EnableTakeProfit=false`, trades close automatically via hedging mechanism
+    -   **TP/SL Mode**: When EA flags enabled, uses EA-calculated TP/SL in pips
+    -   **Indicator Mode**: When EA flags disabled, preserves and uses indicator-provided SL/TP levels
+    -   **Hybrid Mode**: Mix of EA and indicator levels (e.g., EA SL + Indicator TP)
+-   **Target Trend Indicator Support**: Server forwards indicator-provided entry, SL, and TP levels to EA; EA decides whether to use or override based on enable flags
 -   **WebSocket-Only Communication**: Ensures zero-latency, real-time bidirectional communication between the application and MT5, eliminating HTTP polling.
 
 ### System Design Choices
