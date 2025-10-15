@@ -30,6 +30,11 @@ The application consists of a React and TypeScript frontend and an Express and T
     -   **Exit on Opposite Signal**: Trades close automatically upon receiving an opposite signal, without predefined TP/SL.
     -   **TP/SL Mode**: Uses configurable Take Profit (TP) and Stop Loss (SL) distances in pips.
 -   **Target Trend Indicator Support**: Accepts entry, SL, and TP levels directly from TradingView indicators, with a fallback to pip-based settings if not provided.
+-   **EA-Level Hedging & Risk Management** (January 2025):
+    -   **Hedging**: Automatically closes opposite positions before opening new trades (configurable via EA input)
+    -   **Pyramiding Control**: Limits maximum positions per symbol (default: 1)
+    -   **Stop Loss Override**: EA-level stop loss in pips that overrides server settings when enabled
+    -   All features configurable directly in MT5 EA settings without dashboard modifications
 -   **WebSocket-Only Communication**: Ensures zero-latency, real-time bidirectional communication between the application and MT5, eliminating HTTP polling.
 
 ### System Design Choices
