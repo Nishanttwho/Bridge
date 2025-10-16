@@ -1,0 +1,78 @@
+//@version=5
+indicator("3-Candle Momentum Strategy", overlay=true)
+
+// ============================================================================
+// 3-CANDLE MOMENTUM STRATEGY
+// ============================================================================
+// BULLISH: 3 consecutive green candles → BUY on 3rd close
+//          SL = 3rd candle low, TP = 1:2 Risk/Reward
+//
+// BEARISH: 3 consecutive red candles → SELL on 3rd close
+//          SL = 3rd candle high, TP = 1:2 Risk/Reward
+// ============================================================================
+
+// Input settings
+riskRewardRatio = input.float(2.0, "Risk:Reward Ratio", minval=0.5, maxval=10.0, step=0.5)
+
+// Check for 3 consecutive bullish candles
+isBullishCandle = close > open
+is3Bullish = isBullishCandle and isBullishCandle[1] and isBullishCandle[2]
+
+// Check for 3 consecutive bearish candles
+isBearishCandle = close < open
+is3Bearish = isBearishCandle and isBearishCandle[1] and isBearishCandle[2]
+
+// BUY Signal: 3 bullish candles
+buySignal = is3Bullish and not is3Bullish[1]
+
+// SELL Signal: 3 bearish candles
+sellSignal = is3Bearish and not is3Bearish[1]
+
+// Calculate entry, SL, and TP for BUY
+var float buyEntry = na
+var float buySL = na
+var float buyTP = na
+
+if buySignal
+    buyEntry := close
+    buySL := low  // SL at 3rd candle's low
+    riskPips = buyEntry - buySL
+    buyTP := buyEntry + (riskPips * riskRewardRatio)  // TP at 1:2 RR
+
+// Calculate entry, SL, and TP for SELL
+var float sellEntry = na
+var float sellSL = na
+var float sellTP = na
+
+if sellSignal
+    sellEntry := close
+    sellSL := high  // SL at 3rd candle's high
+    riskPips = sellSL - sellEntry
+    sellTP := sellEntry - (riskPips * riskRewardRatio)  // TP at 1:2 RR
+
+// Plot signals
+plotshape(buySignal, "BUY", shape.labelup, location.belowbar, color.new(color.green, 0), text="BUY", textcolor=color.white, size=size.normal)
+plotshape(sellSignal, "SELL", shape.labeldown, location.abovebar, color.new(color.red, 0), text="SELL", textcolor=color.white, size=size.normal)
+
+// Plot SL and TP levels for active signals
+plot(buySignal ? buySL : na, "Buy SL", color.red, 2, plot.style_linebr)
+plot(buySignal ? buyTP : na, "Buy TP", color.green, 2, plot.style_linebr)
+plot(sellSignal ? sellSL : na, "Sell SL", color.red, 2, plot.style_linebr)
+plot(sellSignal ? sellTP : na, "Sell TP", color.green, 2, plot.style_linebr)
+
+// ============================================================================
+// TRADINGVIEW WEBHOOK ALERT SETUP
+// ============================================================================
+// Create an alert with the following settings:
+// Condition: "3-Candle Momentum Strategy" > "Any alert() function call"
+// Webhook URL: https://your-replit-app.replit.dev/webhook/tradingview
+// Message: Use the JSON below
+// ============================================================================
+
+// Alert for BUY signal
+if buySignal
+    alert('{"type":"BUY","symbol":"{{ticker}}","price":' + str.tostring(buyEntry) + ',"stopLoss":' + str.tostring(buySL) + ',"takeProfit":' + str.tostring(buyTP) + ',"source":"3-candle-strategy"}', alert.freq_once_per_bar)
+
+// Alert for SELL signal
+if sellSignal
+    alert('{"type":"SELL","symbol":"{{ticker}}","price":' + str.tostring(sellEntry) + ',"stopLoss":' + str.tostring(sellSL) + ',"takeProfit":' + str.tostring(sellTP) + ',"source":"3-candle-strategy"}', alert.freq_once_per_bar)
