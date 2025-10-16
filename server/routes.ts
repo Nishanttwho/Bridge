@@ -49,8 +49,13 @@ function getPipValue(symbol: string): number {
     return 0.01;
   }
   
-  // Metals (XAUUSD, XAGUSD): pip = 0.01
-  if (upperSymbol.includes('XAU') || upperSymbol.includes('XAG') || upperSymbol.includes('GOLD') || upperSymbol.includes('SILVER')) {
+  // Gold (XAUUSD): pip = 0.10 (10 points)
+  if (upperSymbol.includes('XAU') || upperSymbol.includes('GOLD')) {
+    return 0.10;
+  }
+  
+  // Silver (XAGUSD): pip = 0.01 (1 point)
+  if (upperSymbol.includes('XAG') || upperSymbol.includes('SILVER')) {
     return 0.01;
   }
   

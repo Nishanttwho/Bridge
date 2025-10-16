@@ -27,6 +27,15 @@ input double TakeProfitPips = 30;                  // Take profit in pips (0 = n
 // Lot Size settings
 input double FixedLotSize = 0.01;                  // Fixed lot size for all trades
 
+// Partial Exit settings
+input bool EnablePartialExit = false;              // Enable partial exit
+input double PartialExitPercent = 50;              // Percentage of lot to exit (e.g., 50 for 50%)
+input double PartialExitPips = 50;                 // Pips in profit to trigger partial exit
+
+// Break-Even settings
+input bool EnableBreakEven = false;                // Enable break-even stop loss
+input double BreakEvenPips = 30;                   // Pips in profit to move SL to break-even
+
 // Global variables
 string wsHost;
 int wsPort;
@@ -36,6 +45,10 @@ int wsHandle = -1;
 bool isConnected = false;
 ENUM_ORDER_TYPE_FILLING brokerFillingMode;
 datetime lastHeartbeat;
+
+// Position tracking for partial exit and break-even
+ulong partialExitedPositions[];  // Track positions that have been partially exited
+ulong breakEvenPositions[];      // Track positions that have been moved to break-even
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -87,18 +100,36 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   // Check heartbeat timeout - if no message received in 15 seconds, assume disconnected
+   if(isConnected && (TimeCurrent() - lastHeartbeat) > 15)
+   {
+      Print("[WS ERROR] Heartbeat timeout - no message received in 15 seconds, reconnecting...");
+      isConnected = false;
+      if(wsHandle >= 0)
+      {
+         SocketClose(wsHandle);
+         wsHandle = -1;
+      }
+   }
+   
    // Check if we need to reconnect
    if(!isConnected || wsHandle < 0)
    {
       ConnectWebSocket();
    }
    
-   // Check for incoming messages
+   // Check for incoming messages and send periodic updates
    if(isConnected && wsHandle >= 0)
    {
       CheckForMessages();
       
-      // Send account info and positions to server
+      // Manage partial exits and break-even
+      if(EnablePartialExit)
+         ManagePartialExits();
+      if(EnableBreakEven)
+         ManageBreakEven();
+      
+      // Send account info and positions to server (every second)
       SendAccountInfo();
       SendPositions();
    }
@@ -318,6 +349,9 @@ void CheckForMessages()
    
    if(bytes <= 0)
       return;
+   
+   // Update heartbeat - we received data from server
+   lastHeartbeat = TimeCurrent();
    
    // Decode WebSocket frame
    string message = DecodeWebSocketFrame(buffer, bytes);
@@ -588,11 +622,22 @@ double GetPipValue(string symbol)
       return 1.0;  // 1 point = 1 pip for crypto
    }
    
-   // Check if it's a JPY pair or metal
-   if(StringFind(symbol, "JPY") >= 0 || StringFind(symbol, "XAU") >= 0 || 
-      StringFind(symbol, "XAG") >= 0)
+   // Check if it's Gold (XAUUSD) - 1 pip = 0.10 (10 points)
+   if(StringFind(symbol, "XAU") >= 0 || StringFind(symbol, "GOLD") >= 0)
    {
-      return 0.01;  // 0.01 = 1 pip for JPY/metals
+      return 0.10;  // 0.10 = 1 pip for Gold
+   }
+   
+   // Check if it's Silver (XAGUSD) - 1 pip = 0.01 (1 point)
+   if(StringFind(symbol, "XAG") >= 0 || StringFind(symbol, "SILVER") >= 0)
+   {
+      return 0.01;  // 0.01 = 1 pip for Silver
+   }
+   
+   // Check if it's a JPY pair
+   if(StringFind(symbol, "JPY") >= 0)
+   {
+      return 0.01;  // 0.01 = 1 pip for JPY pairs
    }
    
    // Standard forex pairs
@@ -914,6 +959,177 @@ void ClosePosition(string commandId, string commandJson)
    
    Print("[CLOSE SUCCESS] Position ", positionId, " closed");
    SendReport(commandId, true, "", "", "");
+}
+
+//+------------------------------------------------------------------+
+//| Check if position is in tracking array                           |
+//+------------------------------------------------------------------+
+bool IsPositionTracked(ulong ticket, ulong &trackingArray[])
+{
+   int size = ArraySize(trackingArray);
+   for(int i = 0; i < size; i++)
+   {
+      if(trackingArray[i] == ticket)
+         return true;
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Add position to tracking array                                   |
+//+------------------------------------------------------------------+
+void AddPositionToTracking(ulong ticket, ulong &trackingArray[])
+{
+   int size = ArraySize(trackingArray);
+   ArrayResize(trackingArray, size + 1);
+   trackingArray[size] = ticket;
+}
+
+//+------------------------------------------------------------------+
+//| Manage partial exits for positions                               |
+//+------------------------------------------------------------------+
+void ManagePartialExits()
+{
+   int totalPositions = PositionsTotal();
+   
+   for(int i = 0; i < totalPositions; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && PositionSelectByTicket(ticket))
+      {
+         // Skip if already partially exited
+         if(IsPositionTracked(ticket, partialExitedPositions))
+            continue;
+         
+         string symbol = PositionGetString(POSITION_SYMBOL);
+         long posType = PositionGetInteger(POSITION_TYPE);
+         double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+         double currentPrice = (posType == POSITION_TYPE_BUY) ? SymbolInfoDouble(symbol, SYMBOL_BID) : SymbolInfoDouble(symbol, SYMBOL_ASK);
+         double volume = PositionGetDouble(POSITION_VOLUME);
+         
+         // Calculate profit in pips
+         double pipValue = GetPipValue(symbol);
+         double priceDiff = (posType == POSITION_TYPE_BUY) ? (currentPrice - openPrice) : (openPrice - currentPrice);
+         double profitPips = priceDiff / pipValue;
+         
+         // Check if profit reached partial exit target
+         if(profitPips >= PartialExitPips)
+         {
+            double exitVolume = NormalizeVolume(symbol, volume * PartialExitPercent / 100.0);
+            
+            // Make sure we don't try to close more than we have or less than minimum
+            if(exitVolume > 0 && exitVolume < volume)
+            {
+               Print("[PARTIAL EXIT] Position ", ticket, " (", symbol, ") profit: ", DoubleToString(profitPips, 1), " pips - closing ", DoubleToString(PartialExitPercent, 0), "% (", DoubleToString(exitVolume, 2), " lots)");
+               
+               MqlTradeRequest request = {};
+               MqlTradeResult result = {};
+               
+               request.action = TRADE_ACTION_DEAL;
+               request.position = ticket;
+               request.symbol = symbol;
+               request.volume = exitVolume;
+               request.type = (posType == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+               request.price = currentPrice;
+               request.deviation = 10;
+               request.magic = 123456;
+               request.comment = "Partial Exit";
+               request.type_filling = brokerFillingMode;
+               
+               if(OrderSend(request, result))
+               {
+                  if(result.retcode == TRADE_RETCODE_DONE)
+                  {
+                     Print("[PARTIAL EXIT SUCCESS] Closed ", DoubleToString(exitVolume, 2), " lots of position ", ticket);
+                     AddPositionToTracking(ticket, partialExitedPositions);
+                  }
+                  else
+                  {
+                     Print("[PARTIAL EXIT ERROR] Failed: retcode=", result.retcode);
+                  }
+               }
+               else
+               {
+                  Print("[PARTIAL EXIT ERROR] OrderSend failed: ", GetLastError());
+               }
+            }
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Manage break-even for positions                                  |
+//+------------------------------------------------------------------+
+void ManageBreakEven()
+{
+   int totalPositions = PositionsTotal();
+   
+   for(int i = 0; i < totalPositions; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0 && PositionSelectByTicket(ticket))
+      {
+         // Skip if already moved to break-even
+         if(IsPositionTracked(ticket, breakEvenPositions))
+            continue;
+         
+         string symbol = PositionGetString(POSITION_SYMBOL);
+         long posType = PositionGetInteger(POSITION_TYPE);
+         double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+         double currentPrice = (posType == POSITION_TYPE_BUY) ? SymbolInfoDouble(symbol, SYMBOL_BID) : SymbolInfoDouble(symbol, SYMBOL_ASK);
+         double currentSL = PositionGetDouble(POSITION_SL);
+         
+         // Calculate profit in pips
+         double pipValue = GetPipValue(symbol);
+         double priceDiff = (posType == POSITION_TYPE_BUY) ? (currentPrice - openPrice) : (openPrice - currentPrice);
+         double profitPips = priceDiff / pipValue;
+         
+         // Check if profit reached break-even target
+         if(profitPips >= BreakEvenPips)
+         {
+            // Check if SL is not already at or better than break-even
+            bool needsUpdate = false;
+            if(posType == POSITION_TYPE_BUY && (currentSL == 0 || currentSL < openPrice))
+               needsUpdate = true;
+            else if(posType == POSITION_TYPE_SELL && (currentSL == 0 || currentSL > openPrice))
+               needsUpdate = true;
+            
+            if(needsUpdate)
+            {
+               double newSL = NormalizePrice(symbol, openPrice);
+               
+               Print("[BREAK-EVEN] Position ", ticket, " (", symbol, ") profit: ", DoubleToString(profitPips, 1), " pips - moving SL to break-even: ", DoubleToString(newSL, 5));
+               
+               MqlTradeRequest request = {};
+               MqlTradeResult result = {};
+               
+               request.action = TRADE_ACTION_SLTP;
+               request.position = ticket;
+               request.symbol = symbol;
+               request.sl = newSL;
+               request.tp = PositionGetDouble(POSITION_TP);
+               
+               if(OrderSend(request, result))
+               {
+                  if(result.retcode == TRADE_RETCODE_DONE)
+                  {
+                     Print("[BREAK-EVEN SUCCESS] Moved SL to break-even for position ", ticket);
+                     AddPositionToTracking(ticket, breakEvenPositions);
+                  }
+                  else
+                  {
+                     Print("[BREAK-EVEN ERROR] Failed: retcode=", result.retcode);
+                  }
+               }
+               else
+               {
+                  Print("[BREAK-EVEN ERROR] OrderSend failed: ", GetLastError());
+               }
+            }
+         }
+      }
+   }
 }
 
 //+------------------------------------------------------------------+
