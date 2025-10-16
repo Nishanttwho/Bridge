@@ -32,6 +32,8 @@ The application consists of a React and TypeScript frontend and an Express and T
     -   **Lot Size**: `FixedLotSize` (double, default: 0.01) - EA always uses this value, ignoring server volume
     -   **Hedging**: Automatically closes opposite positions before opening new trades (configurable via `EnableHedging`)
     -   **Pyramiding Control**: `MaxPositionsPerSymbol` limits concurrent positions per symbol
+    -   **Partial Exit** (October 2025): `EnablePartialExit` (bool), `PartialExitPercent` (double), and `PartialExitPips` (double) - Automatically closes a percentage of position when profit reaches specified pips
+    -   **Break-Even Stop Loss** (October 2025): `EnableBreakEven` (bool) and `BreakEvenPips` (double) - Automatically moves stop loss to entry price when profit reaches specified pips
 -   **Flexible Exit Strategies**:
     -   **Exit on Opposite Signal**: When both `EnableStopLoss=false` and `EnableTakeProfit=false`, trades close automatically via hedging mechanism
     -   **TP/SL Mode**: When EA flags enabled, uses EA-calculated TP/SL in pips
@@ -42,6 +44,11 @@ The application consists of a React and TypeScript frontend and an Express and T
 
 ### System Design Choices
 The system prioritizes real-time performance and reliability through a pure WebSocket-based communication model for all MT5 interactions. It employs an in-memory storage for high-speed data access and a clear separation of concerns between frontend and backend. Trade execution order is carefully managed to open new positions before closing opposite ones, preventing execution gaps. Robust error handling and reconnection logic are implemented to prevent partial executions during MT5 disconnections.
+
+### Recent Updates (October 2025)
+-   **Gold Pip Calculation Fix**: Corrected pip value for Gold (XAUUSD) from 0.01 to 0.10 (10 points) in both EA and server. This ensures accurate stop-loss and take-profit calculations for precious metals trading.
+-   **Connection Stability Enhancement**: Added 15-second heartbeat timeout mechanism to detect and recover from silent WebSocket disconnections. The EA now automatically reconnects if no data is received from the server within the timeout period.
+-   **Advanced Trade Management**: Added partial exit and break-even features directly in the EA, allowing traders to automatically secure profits and reduce risk without manual intervention.
 
 ## External Dependencies
 -   **TradingView**: Source of trading signals via webhooks.
