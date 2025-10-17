@@ -1,0 +1,14 @@
+services:
+- type: web
+name: trading-bridge
+env: node
+repo: https://github.com/Nishanttwho/Bridge
+branch: main
+plan: free
+buildCommand: npm ci --prefix server
+startCommand: npm run start --prefix server
+envVars:
+- key: NODE_ENV
+value: production
+- key: PORT
+value: "8000"
